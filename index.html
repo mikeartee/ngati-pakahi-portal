@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngāti Pakahi O Mangaiti</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <div class="gate-logo">🌿</div>
+    <h1>Ngāti Pakahi O Mangaiti</h1>
+    <p class="subtitle">Ko te kāhui o tātou whānau — The gathering place of our family</p>
+
+    <form id="gate-form">
+      <div class="form-group">
+        <label for="full-name">Your Full Name</label>
+        <input type="text" id="full-name" placeholder="e.g. Aroha Tūhoe" required />
+      </div>
+
+      <div class="form-group">
+        <label for="relation-type">How are you related to our Nanny?</label>
+        <select id="relation-type" required>
+          <option value="">— Select your connection —</option>
+          <option value="child">Child (son / daughter)</option>
+          <option value="grandchild">Grandchild (mokopuna)</option>
+          <option value="great-grandchild">Great-grandchild</option>
+          <option value="sibling">Sibling of Nanny</option>
+          <option value="niece-nephew">Niece / Nephew</option>
+          <option value="cousin">Cousin</option>
+          <option value="spouse">Spouse / Partner of whānau member</option>
+          <option value="other">Other connection</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="relation-detail">Describe your connection <span style="font-weight:400;color:#888">(e.g. "daughter of Hemi, son of Nanny")</span></label>
+        <textarea id="relation-detail" rows="3" placeholder="Tell us how you connect back to our matriarch…" required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="access-code">Whānau Access Code</label>
+        <input type="password" id="access-code" placeholder="Enter the code shared by your whānau" required />
+        <small class="text-muted" style="margin-top:5px;display:block">Contact a kaumātua if you need the access code.</small>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+        Tomo mai — Enter
+      </button>
+      <p class="error-msg" id="gate-error">
+        ⚠️ Access code incorrect, or connection not recognised. Please check your details or contact a kaumātua.
+      </p>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Simple shared-secret gate. Replace WHANAU_2025 with your chosen code.
+  const ACCESS_CODE = 'WHANAU_2025';
+
+  document.getElementById('gate-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const name   = document.getElementById('full-name').value.trim();
+    const rel    = document.getElementById('relation-type').value;
+    const detail = document.getElementById('relation-detail').value.trim();
+    const code   = document.getElementById('access-code').value.trim();
+    const err    = document.getElementById('gate-error');
+
+    if (code !== ACCESS_CODE || !rel || detail.length < 5) {
+      err.style.display = 'block';
+      return;
+    }
+
+    // Store session (not sensitive — just UX state)
+    sessionStorage.setItem('whanau_name', name);
+    sessionStorage.setItem('whanau_relation', rel);
+    sessionStorage.setItem('whanau_detail', detail);
+    sessionStorage.setItem('whanau_auth', '1');
+
+    window.location.href = 'home.html';
+  });
+</script>
+</body>
+</html>

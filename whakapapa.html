@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Whakapapa — Ngāti Pakahi O Mangaiti</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .tree-wrap { overflow: auto; background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; min-height: 500px; }
+    .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+    .search-bar input { flex: 1; }
+    .highlight rect { stroke: var(--gold) !important; stroke-width: 3px !important; }
+    .add-form { background: #f5f0e8; border-radius: 8px; padding: 18px; margin-top: 16px; display: none; }
+    .gen-label { font-size: 0.72rem; fill: #888; font-style: italic; }
+  </style>
+</head>
+<body>
+<script src="app.js"></script>
+<script>requireAuth(); renderHeader('whakapapa');</script>
+
+<main>
+  <div class="card" style="margin-bottom:20px">
+    <div class="flex-between">
+      <div class="card-title" style="border:none;margin:0;padding:0">🌳 Whakapapa — Family Tree</div>
+      <button class="btn btn-outline" id="add-btn" style="font-size:0.82rem;padding:6px 14px">+ Add Member</button>
+    </div>
+    <p class="text-muted mt-12">Click any person to see their details. The tree flows from our matriarch at the top.</p>
+
+    <div class="search-bar mt-12">
+      <input type="text" id="search-input" placeholder="Search by name…" />
+      <button class="btn btn-primary" onclick="searchTree()">Search</button>
+      <button class="btn btn-outline" onclick="clearSearch()">Clear</button>
+    </div>
+
+    <!-- Add member form -->
+    <div class="add-form" id="add-form">
+      <div class="two-col">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="af-name" placeholder="e.g. Hemi Tūhoe" />
+        </div>
+        <div class="form-group">
+          <label>Birth Year</label>
+          <input type="text" id="af-birth" placeholder="e.g. 1985" />
+        </div>
+        <div class="form-group">
+          <label>Parent (name must match exactly)</label>
+          <input type="text" id="af-parent" placeholder="e.g. Rangi Pakahi" />
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" id="af-notes" placeholder="e.g. Lives in Auckland" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="addMember()">Add to Tree</button>
+        <button class="btn btn-outline" onclick="toggleAddForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tree-wrap" id="tree-wrap">
+    <svg id="tree-svg"></svg>
+  </div>
+</main>
+
+<!-- Person popup -->
+<div class="person-card-popup" id="person-popup">
+  <button class="popup-close" onclick="closePopup()">✕</button>
+  <h3 id="pp-name"></h3>
+  <p id="pp-birth"></p>
+  <p id="pp-relation"></p>
+  <p id="pp-notes"></p>
+  <p id="pp-children"></p>
+</div>
+
+<footer>
+  <p>Ngāti Pakahi O Mangaiti &mdash; He kāhui, he whānau, he iwi.</p>
+</footer>
+
+<script>
+// ── Family data ────────────────────────────────────────────────────────────
+function getFamilyData() {
+  const raw = localStorage.getItem('whanau_tree');
+  if (raw) return JSON.parse(raw);
+  return [
+    { id: 1,  name: 'Peti Rudolph',   birth: '1928', death: '2010', parent: null,  notes: 'Our beloved matriarch. Born in Mangaiti.' },
+    { id: 2,  name: 'Rangi Pakahi',         birth: '1950', death: null,   parent: 1,     notes: 'Eldest son. Kaumātua of the marae.' },
+    { id: 3,  name: 'Mere Pakahi',          birth: '1953', death: null,   parent: 1,     notes: 'Second child. Lives in Rotorua.' },
+    { id: 4,  name: 'Hemi Pakahi',          birth: '1957', death: null,   parent: 1,     notes: 'Youngest son.' },
+    { id: 5,  name: 'Tūhoe Rangi',          birth: '1975', death: null,   parent: 2,     notes: 'Son of Rangi. Farmer.' },
+    { id: 6,  name: 'Aroha Rangi',          birth: '1978', death: null,   parent: 2,     notes: 'Daughter of Rangi. Teacher.' },
+    { id: 7,  name: 'Piripi Mere',          birth: '1977', death: null,   parent: 3,     notes: 'Son of Mere.' },
+    { id: 8,  name: 'Ngāhuia Mere',         birth: '1980', death: null,   parent: 3,     notes: 'Daughter of Mere.' },
+    { id: 9,  name: 'Koha Hemi',            birth: '1982', death: null,   parent: 4,     notes: 'Son of Hemi.' },
+    { id: 10, name: 'Waimārie Tūhoe',       birth: '2000', death: null,   parent: 5,     notes: 'Daughter of Tūhoe.' },
+    { id: 11, name: 'Rāwiri Tūhoe',         birth: '2003', death: null,   parent: 5,     notes: 'Son of Tūhoe.' },
+    { id: 12, name: 'Kiri Aroha',           birth: '2002', death: null,   parent: 6,     notes: 'Daughter of Aroha.' },
+  ];
+}
+
+function saveFamilyData(data) {
+  localStorage.setItem('whanau_tree', JSON.stringify(data));
+}
+
+// ── Layout engine ──────────────────────────────────────────────────────────
+const NODE_W = 150, NODE_H = 52, H_GAP = 20, V_GAP = 70;
+
+function buildLayout(people) {
+  // Group by generation depth
+  const depthMap = {};
+  function depth(id) {
+    if (depthMap[id] !== undefined) return depthMap[id];
+    const p = people.find(x => x.id === id);
+    if (!p || p.parent === null) { depthMap[id] = 0; return 0; }
+    depthMap[id] = depth(p.parent) + 1;
+    return depthMap[id];
+  }
+  people.forEach(p => depth(p.id));
+
+  const maxDepth = Math.max(...Object.values(depthMap));
+  const rows = [];
+  for (let d = 0; d <= maxDepth; d++) {
+    rows.push(people.filter(p => depthMap[p.id] === d));
+  }
+
+  // Assign x positions per row
+  const positions = {};
+  rows.forEach((row, d) => {
+    const totalW = row.length * NODE_W + (row.length - 1) * H_GAP;
+    row.forEach((p, i) => {
+      positions[p.id] = {
+        x: i * (NODE_W + H_GAP),
+        y: d * (NODE_H + V_GAP),
+        rowWidth: totalW,
+        depth: d,
+      };
+    });
+  });
+
+  // Centre each row relative to the widest row
+  const maxRowW = Math.max(...rows.map(r => r.length * NODE_W + (r.length - 1) * H_GAP));
+  rows.forEach(row => {
+    const rowW = row.length * NODE_W + (row.length - 1) * H_GAP;
+    const offset = (maxRowW - rowW) / 2;
+    row.forEach(p => { positions[p.id].x += offset; });
+  });
+
+  return { positions, maxDepth, maxRowW, rows };
+}
+
+// ── Render SVG ─────────────────────────────────────────────────────────────
+function renderTree() {
+  const people = getFamilyData();
+  const { positions, maxDepth, maxRowW } = buildLayout(people);
+
+  const svgW = maxRowW + 40;
+  const svgH = (maxDepth + 1) * (NODE_H + V_GAP) + 20;
+
+  const svg = document.getElementById('tree-svg');
+  svg.setAttribute('width', svgW);
+  svg.setAttribute('height', svgH);
+  svg.innerHTML = '';
+
+  const PAD = 20;
+
+  // Draw edges first
+  people.forEach(p => {
+    if (p.parent === null) return;
+    const child  = positions[p.id];
+    const parent = positions[p.parent];
+    if (!parent) return;
+    const x1 = parent.x + NODE_W / 2 + PAD;
+    const y1 = parent.y + NODE_H + PAD;
+    const x2 = child.x  + NODE_W / 2 + PAD;
+    const y2 = child.y  + PAD;
+    const my = (y1 + y2) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#b0c8a8');
+    path.setAttribute('stroke-width', '2');
+    svg.appendChild(path);
+  });
+
+  // Draw nodes
+  people.forEach(p => {
+    const pos = positions[p.id];
+    const x = pos.x + PAD, y = pos.y + PAD;
+    const isRoot = p.parent === null;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'tree-node-group');
+    g.setAttribute('data-id', p.id);
+    g.addEventListener('click', (e) => showPopup(p, e));
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', x); rect.setAttribute('y', y);
+    rect.setAttribute('width', NODE_W); rect.setAttribute('height', NODE_H);
+    rect.setAttribute('rx', '8');
+    rect.setAttribute('fill', isRoot ? '#2d5a27' : (pos.depth % 2 === 0 ? '#e8f5e8' : '#f5ede3'));
+    rect.setAttribute('stroke', isRoot ? '#1a3a18' : '#c9a84c');
+    rect.setAttribute('stroke-width', isRoot ? '2.5' : '1.5');
+    g.appendChild(rect);
+
+    // Name text
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', x + NODE_W / 2);
+    text.setAttribute('y', y + (p.birth ? 20 : 28));
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', '12');
+    text.setAttribute('font-weight', '700');
+    text.setAttribute('fill', isRoot ? 'white' : '#1a1a1a');
+    text.setAttribute('font-family', 'Segoe UI, sans-serif');
+    // Truncate long names
+    const displayName = p.name.length > 20 ? p.name.slice(0, 19) + '…' : p.name;
+    text.textContent = displayName;
+    g.appendChild(text);
+
+    if (p.birth) {
+      const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      sub.setAttribute('x', x + NODE_W / 2);
+      sub.setAttribute('y', y + 36);
+      sub.setAttribute('text-anchor', 'middle');
+      sub.setAttribute('font-size', '10');
+      sub.setAttribute('fill', isRoot ? 'rgba(255,255,255,0.75)' : '#888');
+      sub.setAttribute('font-family', 'Segoe UI, sans-serif');
+      sub.textContent = p.death ? `${p.birth} – ${p.death}` : `b. ${p.birth}`;
+      g.appendChild(sub);
+    }
+
+    svg.appendChild(g);
+  });
+}
+
+// ── Popup ──────────────────────────────────────────────────────────────────
+function showPopup(person, e) {
+  const people = getFamilyData();
+  const children = people.filter(p => p.parent === person.id);
+  const parent   = people.find(p => p.id === person.parent);
+
+  document.getElementById('pp-name').textContent    = person.name;
+  document.getElementById('pp-birth').textContent   = person.birth ? `Born: ${person.birth}${person.death ? ' · Died: ' + person.death : ''}` : '';
+  document.getElementById('pp-relation').textContent = parent ? `Child of: ${parent.name}` : '👑 Matriarch';
+  document.getElementById('pp-notes').textContent   = person.notes || '';
+  document.getElementById('pp-children').textContent = children.length ? `Children: ${children.map(c => c.name).join(', ')}` : '';
+
+  const popup = document.getElementById('person-popup');
+  popup.style.display = 'block';
+  popup.style.left = Math.min(e.clientX + 12, window.innerWidth - 320) + 'px';
+  popup.style.top  = Math.min(e.clientY + 12, window.innerHeight - 200) + 'px';
+}
+
+function closePopup() {
+  document.getElementById('person-popup').style.display = 'none';
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+function searchTree() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  document.querySelectorAll('.tree-node-group').forEach(g => {
+    const id = parseInt(g.getAttribute('data-id'));
+    const person = getFamilyData().find(p => p.id === id);
+    g.classList.toggle('highlight', person && person.name.toLowerCase().includes(q) && q.length > 0);
+  });
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.querySelectorAll('.tree-node-group').forEach(g => g.classList.remove('highlight'));
+}
+
+// ── Add member ─────────────────────────────────────────────────────────────
+function toggleAddForm() {
+  const f = document.getElementById('add-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+document.getElementById('add-btn').addEventListener('click', toggleAddForm);
+
+function addMember() {
+  const name   = document.getElementById('af-name').value.trim();
+  const birth  = document.getElementById('af-birth').value.trim();
+  const pName  = document.getElementById('af-parent').value.trim();
+  const notes  = document.getElementById('af-notes').value.trim();
+  if (!name) return alert('Please enter a name.');
+
+  const people = getFamilyData();
+  const parent = people.find(p => p.name.toLowerCase() === pName.toLowerCase());
+  const newId  = Math.max(...people.map(p => p.id)) + 1;
+  people.push({ id: newId, name, birth: birth || null, death: null, parent: parent ? parent.id : null, notes });
+  saveFamilyData(people);
+  toggleAddForm();
+  renderTree();
+}
+
+// Close popup on outside click
+document.addEventListener('click', e => {
+  const popup = document.getElementById('person-popup');
+  if (!popup.contains(e.target) && !e.target.closest('.tree-node-group')) closePopup();
+});
+
+renderTree();
+</script>
+</body>
+</html>

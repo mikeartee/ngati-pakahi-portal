@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kāinga — Ngāti Pakahi O Mangaiti</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="app.js"></script>
+<script>requireAuth(); renderHeader('home');</script>
+
+<main>
+
+  <!-- Quick-nav tiles -->
+  <div class="grid-3" style="margin-bottom:28px">
+    <a href="whakapapa.html" class="stat-tile" style="text-decoration:none;cursor:pointer">
+      <div style="font-size:2.2rem">🌳</div>
+      <div class="stat-label" style="font-size:0.95rem;font-weight:700;color:var(--koru-green);margin-top:6px">Whakapapa</div>
+      <div class="stat-label">Explore the family tree</div>
+    </a>
+    <a href="bookings.html" class="stat-tile" style="text-decoration:none;cursor:pointer">
+      <div style="font-size:2.2rem">📅</div>
+      <div class="stat-label" style="font-size:0.95rem;font-weight:700;color:var(--koru-green);margin-top:6px">Bookings</div>
+      <div class="stat-label">Reserve the hall or meeting house</div>
+    </a>
+    <div class="stat-tile">
+      <div style="font-size:2.2rem">📣</div>
+      <div class="stat-label" style="font-size:0.95rem;font-weight:700;color:var(--koru-green);margin-top:6px">Announcements</div>
+      <div class="stat-label" id="ann-count">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Announcements -->
+  <div class="card">
+    <div class="flex-between">
+      <div class="card-title" style="border:none;margin:0;padding:0">📣 Pānui — Announcements</div>
+      <button class="btn btn-outline" id="compose-btn" style="font-size:0.82rem;padding:6px 14px">+ New Announcement</button>
+    </div>
+    <div style="margin-top:16px">
+
+      <!-- Compose form (hidden by default) -->
+      <div id="compose-form" style="display:none;background:#f5f0e8;border-radius:8px;padding:18px;margin-bottom:16px">
+        <div class="form-group">
+          <label>Title</label>
+          <input type="text" id="new-title" placeholder="Announcement title" />
+        </div>
+        <div class="form-group">
+          <label>Message</label>
+          <textarea id="new-body" rows="3" placeholder="Write your announcement…"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="new-tag">
+            <option value="info">ℹ️ Information</option>
+            <option value="event">🗓 Event</option>
+            <option value="urgent">⚠️ Urgent</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="postAnnouncement()">Post</button>
+          <button class="btn btn-outline" onclick="toggleCompose()">Cancel</button>
+        </div>
+      </div>
+
+      <div id="ann-list"></div>
+    </div>
+  </div>
+
+  <!-- Upcoming bookings preview -->
+  <div class="card mt-20">
+    <div class="card-title">📅 Upcoming Bookings</div>
+    <div id="upcoming-list"></div>
+    <a href="bookings.html" class="btn btn-outline mt-12" style="font-size:0.85rem">View full calendar →</a>
+  </div>
+
+</main>
+
+<footer>
+  <p>Ngāti Pakahi O Mangaiti &mdash; He kāhui, he whānau, he iwi.</p>
+  <p style="margin-top:4px">This site is for whānau use only. Please respect the privacy of all members.</p>
+</footer>
+
+<script>
+  // ── Announcements ─────────────────────────────────────────────────────
+  function getLocalAnnouncements() {
+    const raw = localStorage.getItem('whanau_announcements');
+    return raw ? JSON.parse(raw) : [...ANNOUNCEMENTS];
+  }
+
+  function renderAnnouncements() {
+    const list = getLocalAnnouncements();
+    document.getElementById('ann-count').textContent = `${list.length} notice${list.length !== 1 ? 's' : ''}`;
+    const tagLabel = { urgent: 'Urgent', info: 'Info', event: 'Event' };
+    const tagClass = { urgent: 'badge-urgent', info: 'badge-info', event: 'badge-event' };
+    document.getElementById('ann-list').innerHTML = list.map(a => `
+      <div class="announcement">
+        <div class="ann-date">${formatDate(a.date)}
+          <span class="badge ${tagClass[a.tag]}">${tagLabel[a.tag]}</span>
+        </div>
+        <div class="ann-title">${a.title}</div>
+        <div class="ann-body">${a.body}</div>
+      </div>
+    `).join('');
+  }
+
+  function formatDate(d) {
+    return new Date(d).toLocaleDateString('en-NZ', { day:'numeric', month:'long', year:'numeric' });
+  }
+
+  function toggleCompose() {
+    const f = document.getElementById('compose-form');
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+  document.getElementById('compose-btn').addEventListener('click', toggleCompose);
+
+  function postAnnouncement() {
+    const title = document.getElementById('new-title').value.trim();
+    const body  = document.getElementById('new-body').value.trim();
+    const tag   = document.getElementById('new-tag').value;
+    if (!title || !body) return alert('Please fill in both title and message.');
+    const list = getLocalAnnouncements();
+    list.unshift({ id: Date.now(), date: new Date().toISOString().slice(0,10), title, body, tag });
+    localStorage.setItem('whanau_announcements', JSON.stringify(list));
+    document.getElementById('new-title').value = '';
+    document.getElementById('new-body').value = '';
+    toggleCompose();
+    renderAnnouncements();
+  }
+
+  // ── Upcoming bookings ─────────────────────────────────────────────────
+  function renderUpcoming() {
+    const today = new Date().toISOString().slice(0,10);
+    const upcoming = getBookings()
+      .filter(b => b.date >= today)
+      .sort((a,b) => a.date.localeCompare(b.date))
+      .slice(0, 4);
+
+    if (!upcoming.length) {
+      document.getElementById('upcoming-list').innerHTML = '<p class="text-muted">No upcoming bookings.</p>';
+      return;
+    }
+    document.getElementById('upcoming-list').innerHTML = upcoming.map(b => `
+      <div class="booking-item">
+        <div>
+          <strong>${b.name}</strong>
+          <div class="text-muted" style="font-size:0.82rem">${formatDate(b.date)} &mdash; ${b.bookedBy}</div>
+        </div>
+        <span class="venue-tag ${b.venue === 'hall' ? 'tag-hall' : 'tag-mh'}">
+          ${b.venue === 'hall' ? '🏛 Hall' : '🏠 Meeting House'}
+        </span>
+      </div>
+    `).join('');
+  }
+
+  renderAnnouncements();
+  renderUpcoming();
+</script>
+</body>
+</html>

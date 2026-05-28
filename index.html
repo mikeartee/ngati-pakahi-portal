@@ -215,12 +215,14 @@
     const errEl    = document.getElementById('dev-login-error');
     errEl.style.display = 'none';
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       errEl.textContent = '⚠️ ' + error.message;
       errEl.style.display = 'block';
+      return;
     }
-    // onAuthStateChange will handle the redirect on success
+    // Redirect directly on success
+    window.location.href = 'home.html';
   });
 </script>
 </body>

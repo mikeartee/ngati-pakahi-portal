@@ -56,4 +56,15 @@ These questions need trustee decisions before the portal can be completed. Each 
 
 ---
 
+## 6. Pepeha
+
+**Background:** A pepeha for the marae could be displayed on the home page or the login page, representing the identity of Ngāti Pakahi O Manga Iti.
+
+**Questions:**
+- Should a pepeha be displayed on the site? If so, where — the login page, the home page, or both?
+- What is the agreed pepeha for Ngāti Pakahi O Manga Iti? This should be confirmed by the trustees before it is published.
+- Should the pepeha be displayed in te reo Māori only, or with an English translation alongside it?
+
+---
+
 *Document prepared for trustee review. Decisions from this meeting will be used to complete the portal.*

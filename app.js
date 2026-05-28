@@ -56,11 +56,25 @@ async function renderHeader(activePage) {
 }
 
 // ── Bookings data store (Supabase-backed) ────────────────────────────────
+
+/**
+ * Pure function: returns true if two booking date ranges overlap.
+ * Adjacent bookings (newStart === existingEnd) are NOT considered overlapping.
+ * @param {string} existingStart - ISO date string
+ * @param {string} existingEnd   - ISO date string
+ * @param {string} newStart      - ISO date string
+ * @param {string} newEnd        - ISO date string
+ * @returns {boolean}
+ */
+function bookingsOverlap(existingStart, existingEnd, newStart, newEnd) {
+  return existingStart < newEnd && existingEnd > newStart;
+}
+
 async function getBookings() {
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
-    .order('date', { ascending: true });
+    .order('start_date', { ascending: true });
   if (error) { console.error('getBookings error:', error); return []; }
   return data;
 }

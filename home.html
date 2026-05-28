@@ -131,8 +131,8 @@
     const today = new Date().toISOString().slice(0,10);
     const bookings = await getBookings();
     const upcoming = bookings
-      .filter(b => b.date >= today)
-      .sort((a,b) => a.date.localeCompare(b.date))
+      .filter(b => b.start_date >= today)
+      .sort((a,b) => a.start_date.localeCompare(b.start_date))
       .slice(0, 4);
 
     if (!upcoming.length) {
@@ -142,8 +142,8 @@
     document.getElementById('upcoming-list').innerHTML = upcoming.map(b => `
       <div class="booking-item">
         <div>
-          <strong>${b.name}</strong>
-          <div class="text-muted" style="font-size:0.82rem">${formatDate(b.date)} &mdash; ${b.bookedBy}</div>
+          <strong>${b.event_name}</strong>
+          <div class="text-muted" style="font-size:0.82rem">${formatDate(b.start_date)} &mdash; ${b.booked_by}</div>
         </div>
         <span class="venue-tag ${b.venue === 'hall' ? 'tag-hall' : 'tag-mh'}">
           ${b.venue === 'hall' ? '🏛 Hall' : '🏠 Meeting House'}

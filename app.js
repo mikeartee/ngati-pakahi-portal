@@ -47,49 +47,47 @@ function renderHeader(activePage) {
   `);
 }
 
-// ── Bookings data store (sessionStorage-backed) ───────────────────────────
-function getBookings() {
-  const raw = localStorage.getItem('whanau_bookings');
-  return raw ? JSON.parse(raw) : [
-    { id: 1, venue: 'hall',         date: '2025-08-02', name: 'Tūhoe Reunion',        bookedBy: 'Hemi Tūhoe' },
-    { id: 2, venue: 'meetinghouse', date: '2025-08-09', name: 'Karakia & Hui',         bookedBy: 'Aroha Ngāti' },
-    { id: 3, venue: 'hall',         date: '2025-08-16', name: 'Birthday Celebration',  bookedBy: 'Rangi Pakahi' },
-    { id: 4, venue: 'meetinghouse', date: '2025-08-23', name: 'Whakapapa Workshop',    bookedBy: 'Mere Tūhoe' },
-  ];
+// ── Bookings data store (Supabase-backed) ────────────────────────────────
+async function getBookings() {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .order('date', { ascending: true });
+  if (error) { console.error('getBookings error:', error); return []; }
+  return data;
 }
 
-function saveBookings(bookings) {
-  localStorage.setItem('whanau_bookings', JSON.stringify(bookings));
+async function saveBookings(bookings) {
+  // Upsert the full list — callers pass the mutated array after push/filter
+  const { error } = await supabase
+    .from('bookings')
+    .upsert(bookings, { onConflict: 'id' });
+  if (error) console.error('saveBookings error:', error);
 }
 
-// ── Announcements data ────────────────────────────────────────────────────
-const ANNOUNCEMENTS = [
-  {
-    id: 1,
-    date: '2025-07-28',
-    title: 'Annual Whānau Hui — Save the Date',
-    body: 'Our annual gathering will be held on 23 August 2025 at the meeting house. All whānau are warmly invited. Bring a plate!',
-    tag: 'event',
-  },
-  {
-    id: 2,
-    date: '2025-07-20',
-    title: 'Hall Maintenance — Closed 5–6 Aug',
-    body: 'The hall will be closed for roof repairs on 5 and 6 August. Please plan bookings accordingly.',
-    tag: 'urgent',
-  },
-  {
-    id: 3,
-    date: '2025-07-15',
-    title: 'Whakapapa Records Update',
-    body: 'New records have been added to the family tree. Check the Whakapapa page to see the latest additions from the Tūhoe branch.',
-    tag: 'info',
-  },
-  {
-    id: 4,
-    date: '2025-07-01',
-    title: 'Scholarship Applications Open',
-    body: 'Applications for the Ngāti Pakahi education scholarship are now open. Contact the secretary for the application form.',
-    tag: 'info',
-  },
-];
+// ── Announcements data (Supabase-backed) ──────────────────────────────────
+async function getAnnouncements() {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .order('date', { ascending: false });
+  if (error) { console.error('getAnnouncements error:', error); return []; }
+  return data;
+}
+
+// ── Whakapapa / family data (Supabase-backed) ─────────────────────────────
+async function getFamilyData() {
+  const { data, error } = await supabase
+    .from('whakapapa')
+    .select('*')
+    .order('id', { ascending: true });
+  if (error) { console.error('getFamilyData error:', error); return []; }
+  return data;
+}
+
+async function saveFamilyData(data) {
+  const { error } = await supabase
+    .from('whakapapa')
+    .upsert(data, { onConflict: 'id' });
+  if (error) console.error('saveFamilyData error:', error);
+}

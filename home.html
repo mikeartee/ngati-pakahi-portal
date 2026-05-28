@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kāinga — Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
 </head>
 <body>
 <script src="app.js"></script>
@@ -83,13 +85,8 @@
 
 <script>
   // ── Announcements ─────────────────────────────────────────────────────
-  function getLocalAnnouncements() {
-    const raw = localStorage.getItem('whanau_announcements');
-    return raw ? JSON.parse(raw) : [...ANNOUNCEMENTS];
-  }
-
-  function renderAnnouncements() {
-    const list = getLocalAnnouncements();
+  async function renderAnnouncements() {
+    const list = await getAnnouncements();
     document.getElementById('ann-count').textContent = `${list.length} notice${list.length !== 1 ? 's' : ''}`;
     const tagLabel = { urgent: 'Urgent', info: 'Info', event: 'Event' };
     const tagClass = { urgent: 'badge-urgent', info: 'badge-info', event: 'badge-event' };
@@ -114,24 +111,26 @@
   }
   document.getElementById('compose-btn').addEventListener('click', toggleCompose);
 
-  function postAnnouncement() {
+  async function postAnnouncement() {
     const title = document.getElementById('new-title').value.trim();
     const body  = document.getElementById('new-body').value.trim();
     const tag   = document.getElementById('new-tag').value;
     if (!title || !body) return alert('Please fill in both title and message.');
-    const list = getLocalAnnouncements();
-    list.unshift({ id: Date.now(), date: new Date().toISOString().slice(0,10), title, body, tag });
-    localStorage.setItem('whanau_announcements', JSON.stringify(list));
+    const { error } = await supabase
+      .from('announcements')
+      .insert([{ date: new Date().toISOString().slice(0,10), title, body, tag }]);
+    if (error) { console.error('postAnnouncement error:', error); return; }
     document.getElementById('new-title').value = '';
     document.getElementById('new-body').value = '';
     toggleCompose();
-    renderAnnouncements();
+    await renderAnnouncements();
   }
 
   // ── Upcoming bookings ─────────────────────────────────────────────────
-  function renderUpcoming() {
+  async function renderUpcoming() {
     const today = new Date().toISOString().slice(0,10);
-    const upcoming = getBookings()
+    const bookings = await getBookings();
+    const upcoming = bookings
       .filter(b => b.date >= today)
       .sort((a,b) => a.date.localeCompare(b.date))
       .slice(0, 4);

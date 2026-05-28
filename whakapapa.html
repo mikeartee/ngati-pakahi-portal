@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Whakapapa — Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
   <style>
     .tree-wrap { overflow: auto; background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; min-height: 500px; }
     .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
@@ -79,30 +81,6 @@
 </footer>
 
 <script>
-// ── Family data ────────────────────────────────────────────────────────────
-function getFamilyData() {
-  const raw = localStorage.getItem('whanau_tree');
-  if (raw) return JSON.parse(raw);
-  return [
-    { id: 1,  name: 'Peti Rudolph',   birth: '1928', death: '2010', parent: null,  notes: 'Our beloved matriarch. Born in Mangaiti.' },
-    { id: 2,  name: 'Rangi Pakahi',         birth: '1950', death: null,   parent: 1,     notes: 'Eldest son. Kaumātua of the marae.' },
-    { id: 3,  name: 'Mere Pakahi',          birth: '1953', death: null,   parent: 1,     notes: 'Second child. Lives in Rotorua.' },
-    { id: 4,  name: 'Hemi Pakahi',          birth: '1957', death: null,   parent: 1,     notes: 'Youngest son.' },
-    { id: 5,  name: 'Tūhoe Rangi',          birth: '1975', death: null,   parent: 2,     notes: 'Son of Rangi. Farmer.' },
-    { id: 6,  name: 'Aroha Rangi',          birth: '1978', death: null,   parent: 2,     notes: 'Daughter of Rangi. Teacher.' },
-    { id: 7,  name: 'Piripi Mere',          birth: '1977', death: null,   parent: 3,     notes: 'Son of Mere.' },
-    { id: 8,  name: 'Ngāhuia Mere',         birth: '1980', death: null,   parent: 3,     notes: 'Daughter of Mere.' },
-    { id: 9,  name: 'Koha Hemi',            birth: '1982', death: null,   parent: 4,     notes: 'Son of Hemi.' },
-    { id: 10, name: 'Waimārie Tūhoe',       birth: '2000', death: null,   parent: 5,     notes: 'Daughter of Tūhoe.' },
-    { id: 11, name: 'Rāwiri Tūhoe',         birth: '2003', death: null,   parent: 5,     notes: 'Son of Tūhoe.' },
-    { id: 12, name: 'Kiri Aroha',           birth: '2002', death: null,   parent: 6,     notes: 'Daughter of Aroha.' },
-  ];
-}
-
-function saveFamilyData(data) {
-  localStorage.setItem('whanau_tree', JSON.stringify(data));
-}
-
 // ── Layout engine ──────────────────────────────────────────────────────────
 const NODE_W = 150, NODE_H = 52, H_GAP = 20, V_GAP = 70;
 
@@ -150,8 +128,8 @@ function buildLayout(people) {
 }
 
 // ── Render SVG ─────────────────────────────────────────────────────────────
-function renderTree() {
-  const people = getFamilyData();
+async function renderTree() {
+  const people = await getFamilyData();
   const { positions, maxDepth, maxRowW } = buildLayout(people);
 
   const svgW = maxRowW + 40;
@@ -234,8 +212,8 @@ function renderTree() {
 }
 
 // ── Popup ──────────────────────────────────────────────────────────────────
-function showPopup(person, e) {
-  const people = getFamilyData();
+async function showPopup(person, e) {
+  const people = await getFamilyData();
   const children = people.filter(p => p.parent === person.id);
   const parent   = people.find(p => p.id === person.parent);
 
@@ -256,11 +234,12 @@ function closePopup() {
 }
 
 // ── Search ─────────────────────────────────────────────────────────────────
-function searchTree() {
+async function searchTree() {
   const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const people = await getFamilyData();
   document.querySelectorAll('.tree-node-group').forEach(g => {
     const id = parseInt(g.getAttribute('data-id'));
-    const person = getFamilyData().find(p => p.id === id);
+    const person = people.find(p => p.id === id);
     g.classList.toggle('highlight', person && person.name.toLowerCase().includes(q) && q.length > 0);
   });
 }
@@ -277,20 +256,20 @@ function toggleAddForm() {
 }
 document.getElementById('add-btn').addEventListener('click', toggleAddForm);
 
-function addMember() {
+async function addMember() {
   const name   = document.getElementById('af-name').value.trim();
   const birth  = document.getElementById('af-birth').value.trim();
   const pName  = document.getElementById('af-parent').value.trim();
   const notes  = document.getElementById('af-notes').value.trim();
   if (!name) return alert('Please enter a name.');
 
-  const people = getFamilyData();
+  const people = await getFamilyData();
   const parent = people.find(p => p.name.toLowerCase() === pName.toLowerCase());
   const newId  = Math.max(...people.map(p => p.id)) + 1;
-  people.push({ id: newId, name, birth: birth || null, death: null, parent: parent ? parent.id : null, notes });
-  saveFamilyData(people);
+  const newMember = { id: newId, name, birth: birth || null, death: null, parent: parent ? parent.id : null, notes };
+  await saveFamilyData([...people, newMember]);
   toggleAddForm();
-  renderTree();
+  await renderTree();
 }
 
 // Close popup on outside click

@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kāinga — Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth(); renderHeader('home');</script>
+<script>requireAuth().then(() => { renderHeader('home'); initPage(); });</script>
 
 <main>
 
@@ -35,7 +37,7 @@
   <div class="card">
     <div class="flex-between">
       <div class="card-title" style="border:none;margin:0;padding:0">📣 Pānui — Announcements</div>
-      <button class="btn btn-outline" id="compose-btn" style="font-size:0.82rem;padding:6px 14px">+ New Announcement</button>
+      <button class="btn btn-outline" id="compose-btn" style="font-size:0.82rem;padding:6px 14px;display:none">+ New Announcement</button>
     </div>
     <div style="margin-top:16px">
 
@@ -83,25 +85,38 @@
 
 <script>
   // ── Announcements ─────────────────────────────────────────────────────
-  function getLocalAnnouncements() {
-    const raw = localStorage.getItem('whanau_announcements');
-    return raw ? JSON.parse(raw) : [...ANNOUNCEMENTS];
-  }
-
-  function renderAnnouncements() {
-    const list = getLocalAnnouncements();
+  async function renderAnnouncements() {
+    const list = await getAnnouncements();
     document.getElementById('ann-count').textContent = `${list.length} notice${list.length !== 1 ? 's' : ''}`;
     const tagLabel = { urgent: 'Urgent', info: 'Info', event: 'Event' };
     const tagClass = { urgent: 'badge-urgent', info: 'badge-info', event: 'badge-event' };
-    document.getElementById('ann-list').innerHTML = list.map(a => `
-      <div class="announcement">
-        <div class="ann-date">${formatDate(a.date)}
-          <span class="badge ${tagClass[a.tag]}">${tagLabel[a.tag]}</span>
-        </div>
-        <div class="ann-title">${a.title}</div>
-        <div class="ann-body">${a.body}</div>
-      </div>
-    `).join('');
+    const container = document.getElementById('ann-list');
+    container.innerHTML = '';
+    list.forEach(a => {
+      const item = document.createElement('div');
+      item.className = 'announcement';
+
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'ann-date';
+      dateDiv.textContent = formatDate(a.date);
+      const badge = document.createElement('span');
+      badge.className = `badge ${tagClass[a.tag] || 'badge-info'}`;
+      badge.textContent = tagLabel[a.tag] || a.tag;
+      dateDiv.appendChild(badge);
+
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'ann-title';
+      titleDiv.textContent = a.title;
+
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'ann-body';
+      bodyDiv.textContent = a.body;
+
+      item.appendChild(dateDiv);
+      item.appendChild(titleDiv);
+      item.appendChild(bodyDiv);
+      container.appendChild(item);
+    });
   }
 
   function formatDate(d) {
@@ -114,47 +129,96 @@
   }
   document.getElementById('compose-btn').addEventListener('click', toggleCompose);
 
-  function postAnnouncement() {
+  async function checkTrustee() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return false;
+    const { data } = await supabase
+      .from('profiles')
+      .select('is_trustee')
+      .eq('id', session.user.id)
+      .single();
+    return data?.is_trustee === true;
+  }
+
+  async function postAnnouncement() {
     const title = document.getElementById('new-title').value.trim();
     const body  = document.getElementById('new-body').value.trim();
     const tag   = document.getElementById('new-tag').value;
     if (!title || !body) return alert('Please fill in both title and message.');
-    const list = getLocalAnnouncements();
-    list.unshift({ id: Date.now(), date: new Date().toISOString().slice(0,10), title, body, tag });
-    localStorage.setItem('whanau_announcements', JSON.stringify(list));
+
+    const user = await getUser();
+    const { error } = await supabase.from('announcements').insert({
+      title,
+      body,
+      tag,
+      posted_by: user.name,
+      date: new Date().toISOString().slice(0, 10)
+    });
+    if (error) { alert('Could not post announcement.'); return; }
+
     document.getElementById('new-title').value = '';
     document.getElementById('new-body').value = '';
     toggleCompose();
-    renderAnnouncements();
+    await renderAnnouncements();
   }
 
   // ── Upcoming bookings ─────────────────────────────────────────────────
-  function renderUpcoming() {
+  async function renderUpcoming() {
     const today = new Date().toISOString().slice(0,10);
-    const upcoming = getBookings()
-      .filter(b => b.date >= today)
-      .sort((a,b) => a.date.localeCompare(b.date))
+    const bookings = await getBookings();
+    const upcoming = bookings
+      .filter(b => b.start_date >= today)
+      .sort((a,b) => a.start_date.localeCompare(b.start_date))
       .slice(0, 4);
 
     if (!upcoming.length) {
       document.getElementById('upcoming-list').innerHTML = '<p class="text-muted">No upcoming bookings.</p>';
       return;
     }
-    document.getElementById('upcoming-list').innerHTML = upcoming.map(b => `
-      <div class="booking-item">
-        <div>
-          <strong>${b.name}</strong>
-          <div class="text-muted" style="font-size:0.82rem">${formatDate(b.date)} &mdash; ${b.bookedBy}</div>
-        </div>
-        <span class="venue-tag ${b.venue === 'hall' ? 'tag-hall' : 'tag-mh'}">
-          ${b.venue === 'hall' ? '🏛 Hall' : '🏠 Meeting House'}
-        </span>
-      </div>
-    `).join('');
+    const container = document.getElementById('upcoming-list');
+    container.innerHTML = '';
+    upcoming.forEach(b => {
+      const item = document.createElement('div');
+      item.className = 'booking-item';
+
+      const info = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = b.event_name;
+      const meta = document.createElement('div');
+      meta.className = 'text-muted';
+      meta.style.fontSize = '0.82rem';
+      meta.textContent = `${formatDate(b.start_date)} — ${b.booked_by}`;
+      info.appendChild(strong);
+      info.appendChild(meta);
+
+      const tag = document.createElement('span');
+      tag.className = `venue-tag ${b.venue === 'hall' ? 'tag-hall' : 'tag-mh'}`;
+      tag.textContent = b.venue === 'hall' ? '🏛 Hall' : '🏠 Meeting House';
+
+      item.appendChild(info);
+      item.appendChild(tag);
+      container.appendChild(item);
+    });
   }
 
-  renderAnnouncements();
-  renderUpcoming();
+  (async () => {
+    await renderAnnouncements();
+    await renderUpcoming();
+    const isTrustee = await checkTrustee();
+    if (isTrustee) {
+      document.getElementById('compose-btn').style.display = 'inline-block';
+    }
+  })();
+}
+
+async function initPage() {
+  await renderAnnouncements();
+  await renderUpcoming();
+  const isTrustee = await checkTrustee();
+  if (!isTrustee) {
+    document.getElementById('compose-btn').style.display = 'none';
+  }
+}
 </script>
 </body>
 </html>

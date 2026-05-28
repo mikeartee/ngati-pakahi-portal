@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bookings — Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth(); renderHeader('bookings');</script>
+<script>requireAuth().then(() => { renderHeader('bookings'); init(); });</script>
 
 <main>
   <div class="two-col" style="align-items:start">
@@ -53,12 +55,20 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Date</label>
-            <input type="date" id="b-date" required />
+            <label>Start Date</label>
+            <input type="date" id="b-start-date" required />
+          </div>
+          <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="b-end-date" required />
           </div>
           <div class="form-group">
             <label>Purpose / Event Name</label>
             <input type="text" id="b-purpose" placeholder="e.g. Birthday, Hui, Tangi…" required />
+          </div>
+          <div class="form-group">
+            <label>Contact details (not shown publicly)</label>
+            <textarea id="b-contact" rows="2" placeholder="Phone, email, or any contact details…"></textarea>
           </div>
           <button type="submit" class="btn btn-primary" style="width:100%">Confirm Booking</button>
           <p id="booking-msg" style="margin-top:10px;font-size:0.88rem;display:none"></p>
@@ -85,19 +95,20 @@
 <script>
   let currentYear, currentMonth;
 
-  function init() {
+  async function init() {
     const now = new Date();
     currentYear  = now.getFullYear();
     currentMonth = now.getMonth();
 
     // Pre-fill name from session
-    document.getElementById('b-name').value = getUser().name;
+    const currentUser = await getUser();
+    document.getElementById('b-name').value = currentUser.name;
 
-    renderCalendar();
-    renderBookingLists();
+    await renderCalendar();
+    await renderBookingLists();
 
-    document.getElementById('prev-month').addEventListener('click', () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } renderCalendar(); });
-    document.getElementById('next-month').addEventListener('click', () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } renderCalendar(); });
+    document.getElementById('prev-month').addEventListener('click', async () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } await renderCalendar(); });
+    document.getElementById('next-month').addEventListener('click', async () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } await renderCalendar(); });
     document.getElementById('booking-form').addEventListener('submit', handleBooking);
   }
 
@@ -105,13 +116,13 @@
   const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  function renderCalendar() {
+  async function renderCalendar() {
     document.getElementById('cal-month-label').textContent = `${MONTH_NAMES[currentMonth]} ${currentYear}`;
 
     // Headers
     document.getElementById('cal-headers').innerHTML = DAY_NAMES.map(d => `<div class="cal-header">${d}</div>`).join('');
 
-    const bookings = getBookings();
+    const bookings = await getBookings();
     const today = new Date().toISOString().slice(0,10);
     const firstDay = new Date(currentYear, currentMonth, 1).getDay();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -121,7 +132,8 @@
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const dayBookings = bookings.filter(b => b.date === dateStr);
+      // A day is within a booking if: start_date <= day < end_date (exclusive end)
+      const dayBookings = bookings.filter(b => b.start_date <= dateStr && b.end_date > dateStr);
       const hasHall = dayBookings.some(b => b.venue === 'hall');
       const hasMH   = dayBookings.some(b => b.venue === 'meetinghouse');
       const full    = hasHall && hasMH;
@@ -142,46 +154,68 @@
   }
 
   function selectDate(dateStr) {
-    document.getElementById('b-date').value = dateStr;
+    document.getElementById('b-start-date').value = dateStr;
     document.querySelectorAll('.cal-day').forEach(el => el.classList.remove('selected'));
     event.currentTarget.classList.add('selected');
   }
 
   // ── Booking form ────────────────────────────────────────────────────────
-  function handleBooking(e) {
+  async function handleBooking(e) {
     e.preventDefault();
-    const name    = document.getElementById('b-name').value.trim();
-    const venue   = document.getElementById('b-venue').value;
-    const date    = document.getElementById('b-date').value;
-    const purpose = document.getElementById('b-purpose').value.trim();
-    const msg     = document.getElementById('booking-msg');
+    const name      = document.getElementById('b-name').value.trim();
+    const venue     = document.getElementById('b-venue').value;
+    const startDate = document.getElementById('b-start-date').value;
+    const endDate   = document.getElementById('b-end-date').value;
+    const purpose   = document.getElementById('b-purpose').value.trim();
+    const contact   = document.getElementById('b-contact').value.trim();
+    const msg       = document.getElementById('booking-msg');
 
-    const bookings = getBookings();
-    const conflict = bookings.find(b => b.date === date && b.venue === venue);
-    if (conflict) {
+    if (endDate <= startDate) {
       msg.style.display = 'block';
       msg.style.color = '#c0392b';
-      msg.textContent = `⚠️ That venue is already booked on ${formatDate(date)} by ${conflict.bookedBy}.`;
+      msg.textContent = '⚠️ End date must be after start date.';
       return;
     }
 
-    bookings.push({ id: Date.now(), venue, date, name: purpose, bookedBy: name });
-    saveBookings(bookings);
+    const bookings = await getBookings();
+    const conflict = bookings.find(b =>
+      b.venue === venue && bookingsOverlap(b.start_date, b.end_date, startDate, endDate)
+    );
+    if (conflict) {
+      msg.style.display = 'block';
+      msg.style.color = '#c0392b';
+      msg.textContent = `⚠️ That venue is already booked for overlapping dates (${formatDate(conflict.start_date)} – ${formatDate(conflict.end_date)}) by ${conflict.booked_by}.`;
+      return;
+    }
+
+    const { error } = await supabase
+      .from('bookings')
+      .insert({ venue, start_date: startDate, end_date: endDate, event_name: purpose, booked_by: name, contact });
+
+    if (error) {
+      msg.style.display = 'block';
+      msg.style.color = '#c0392b';
+      msg.textContent = '⚠️ Failed to save booking. Please try again.';
+      console.error('insert error:', error);
+      return;
+    }
 
     msg.style.display = 'block';
     msg.style.color = 'var(--koru-green)';
-    msg.textContent = `✅ Booking confirmed for ${formatDate(date)}!`;
+    msg.textContent = `✅ Booking confirmed for ${formatDate(startDate)} – ${formatDate(endDate)}!`;
     e.target.reset();
-    document.getElementById('b-name').value = getUser().name;
+    const currentUser = await getUser();
+    document.getElementById('b-name').value = currentUser.name;
 
-    renderCalendar();
-    renderBookingLists();
+    await renderCalendar();
+    await renderBookingLists();
   }
 
   // ── Booking lists ───────────────────────────────────────────────────────
-  function renderBookingLists() {
-    const all  = getBookings().sort((a,b) => a.date.localeCompare(b.date));
-    const mine = all.filter(b => b.bookedBy === getUser().name);
+  async function renderBookingLists() {
+    const all  = (await getBookings()).sort((a,b) => a.start_date.localeCompare(b.start_date));
+    const currentUser = await getUser();
+    const mine = all.filter(b => b.booked_by === currentUser.name);
     document.getElementById('tab-all').innerHTML  = renderList(all);
     document.getElementById('tab-mine').innerHTML = renderList(mine, true);
   }
@@ -191,8 +225,8 @@
     return list.map(b => `
       <div class="booking-item">
         <div>
-          <strong>${b.name}</strong>
-          <div class="text-muted" style="font-size:0.82rem">${formatDate(b.date)} &mdash; ${b.bookedBy}</div>
+          <strong>${b.event_name}</strong>
+          <div class="text-muted" style="font-size:0.82rem">${formatDate(b.start_date)} &ndash; ${formatDate(b.end_date)} &mdash; ${b.booked_by}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="venue-tag ${b.venue === 'hall' ? 'tag-hall' : 'tag-mh'}">
@@ -204,11 +238,12 @@
     `).join('');
   }
 
-  function deleteBooking(id) {
+  async function deleteBooking(id) {
     if (!confirm('Cancel this booking?')) return;
-    saveBookings(getBookings().filter(b => b.id !== id));
-    renderCalendar();
-    renderBookingLists();
+    const { error } = await supabase.from('bookings').delete().eq('id', id);
+    if (error) { console.error('deleteBooking error:', error); return; }
+    await renderCalendar();
+    await renderBookingLists();
   }
 
   function switchTab(tab, btn) {
@@ -222,7 +257,7 @@
     return new Date(d).toLocaleDateString('en-NZ', { day:'numeric', month:'long', year:'numeric' });
   }
 
-  init();
+  // init() is called from requireAuth().then() in the script tag above
 </script>
 </body>
 </html>

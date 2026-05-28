@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
 </head>
 <body>
 
@@ -14,73 +16,178 @@
     <h1>Ngāti Pakahi O Mangaiti</h1>
     <p class="subtitle">Ko te kāhui o tātou whānau — The gathering place of our family</p>
 
-    <form id="gate-form">
-      <div class="form-group">
-        <label for="full-name">Your Full Name</label>
-        <input type="text" id="full-name" placeholder="e.g. Aroha Tūhoe" required />
-      </div>
+    <!-- Status message (shown after form submission) -->
+    <div id="gate-status" style="display:none;background:#e8f5e8;border:1px solid #b0c8a8;border-radius:8px;padding:14px 18px;margin-bottom:18px;color:#2d5a27;font-weight:600;text-align:center;"></div>
 
-      <div class="form-group">
-        <label for="relation-type">How are you related to our Nanny?</label>
-        <select id="relation-type" required>
-          <option value="">— Select your connection —</option>
-          <option value="child">Child (son / daughter)</option>
-          <option value="grandchild">Grandchild (mokopuna)</option>
-          <option value="great-grandchild">Great-grandchild</option>
-          <option value="sibling">Sibling of Nanny</option>
-          <option value="niece-nephew">Niece / Nephew</option>
-          <option value="cousin">Cousin</option>
-          <option value="spouse">Spouse / Partner of whānau member</option>
-          <option value="other">Other connection</option>
-        </select>
-      </div>
+    <!-- Registration section (new users) -->
+    <div id="register-section">
+      <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">New to the site? Register here</h2>
+      <form id="register-form">
+        <div class="form-group">
+          <label for="reg-name">Full Name</label>
+          <input type="text" id="reg-name" placeholder="e.g. Aroha Tūhoe" required />
+        </div>
+        <div class="form-group">
+          <label for="reg-email">Email</label>
+          <input type="email" id="reg-email" placeholder="your@email.com" required />
+        </div>
+        <div class="form-group">
+          <label for="reg-birth-year">Birth Year</label>
+          <input type="number" id="reg-birth-year" placeholder="e.g. 1985" min="1900" max="2099" required />
+        </div>
+        <div class="form-group">
+          <label for="reg-parent-name">Parent's Name</label>
+          <input type="text" id="reg-parent-name" placeholder="e.g. Hemi Pakahi" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+          Register &amp; get sign-in link
+        </button>
+        <p class="error-msg" id="register-error"></p>
+      </form>
+    </div>
 
-      <div class="form-group">
-        <label for="relation-detail">Describe your connection <span style="font-weight:400;color:#888">(e.g. "daughter of Hemi, son of Nanny")</span></label>
-        <textarea id="relation-detail" rows="3" placeholder="Tell us how you connect back to our matriarch…" required></textarea>
-      </div>
+    <!-- Divider -->
+    <div style="display:flex;align-items:center;gap:12px;margin:22px 0">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="color:#888;font-size:0.85rem">Already registered?</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
 
-      <div class="form-group">
-        <label for="access-code">Whānau Access Code</label>
-        <input type="password" id="access-code" placeholder="Enter the code shared by your whānau" required />
-        <small class="text-muted" style="margin-top:5px;display:block">Contact a kaumātua if you need the access code.</small>
-      </div>
+    <!-- Returning user section -->
+    <div id="login-section">
+      <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">Sign in</h2>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="your@email.com" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+          Send sign-in link
+        </button>
+        <p class="error-msg" id="login-error"></p>
+      </form>
+    </div>
 
-      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
-        Tomo mai — Enter
-      </button>
-      <p class="error-msg" id="gate-error">
-        ⚠️ Access code incorrect, or connection not recognised. Please check your details or contact a kaumātua.
-      </p>
-    </form>
   </div>
 </div>
 
 <script>
-  // Simple shared-secret gate. Replace WHANAU_2025 with your chosen code.
-  const ACCESS_CODE = 'WHANAU_2025';
+(async function () {
+  // ── Auth callback: check for an existing session on page load ──────────
+  const { data: { session } } = await supabase.auth.getSession();
 
-  document.getElementById('gate-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const name   = document.getElementById('full-name').value.trim();
-    const rel    = document.getElementById('relation-type').value;
-    const detail = document.getElementById('relation-detail').value.trim();
-    const code   = document.getElementById('access-code').value.trim();
-    const err    = document.getElementById('gate-error');
+  if (session) {
+    // User has a valid session — check if they already have a whakapapa row
+    const { data: rows } = await supabase
+      .from('whakapapa')
+      .select('id')
+      .eq('auth_user_id', session.user.id)
+      .limit(1);
 
-    if (code !== ACCESS_CODE || !rel || detail.length < 5) {
-      err.style.display = 'block';
+    if (rows && rows.length > 0) {
+      // Existing member — go straight to home
+      window.location.href = 'home.html';
       return;
     }
 
-    // Store session (not sensitive — just UX state)
-    sessionStorage.setItem('whanau_name', name);
-    sessionStorage.setItem('whanau_relation', rel);
-    sessionStorage.setItem('whanau_detail', detail);
-    sessionStorage.setItem('whanau_auth', '1');
+    // New user who just clicked their magic link — create whakapapa row.
+    // Registration data is stored in localStorage (not sessionStorage) so it
+    // survives the magic link opening in a new tab or on a different device.
+    const name        = localStorage.getItem('reg_name');
+    const birth_year  = parseInt(localStorage.getItem('reg_birth_year')) || null;
+    const parent_name = localStorage.getItem('reg_parent_name');
+
+    if (name && parent_name) {
+      // Look up parent by name (case-insensitive)
+      const { data: parentRows } = await supabase
+        .from('whakapapa')
+        .select('id')
+        .ilike('name', parent_name)
+        .limit(1);
+
+      const parent_id = parentRows?.length ? parentRows[0].id : null;
+
+      // Use upsert with ignoreDuplicates to prevent duplicate rows if the
+      // magic link is clicked more than once.
+      await supabase.from('whakapapa').upsert({
+        name,
+        email: session.user.email,
+        birth_year,
+        parent_name,
+        parent_id,
+        auth_user_id: session.user.id
+      }, { onConflict: 'auth_user_id', ignoreDuplicates: true });
+
+      localStorage.removeItem('reg_name');
+      localStorage.removeItem('reg_birth_year');
+      localStorage.removeItem('reg_parent_name');
+    }
 
     window.location.href = 'home.html';
+    return;
+  }
+
+  // ── No session — show the gate forms ──────────────────────────────────
+
+  // Registration form handler
+  document.getElementById('register-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const name       = document.getElementById('reg-name').value.trim();
+    const email      = document.getElementById('reg-email').value.trim();
+    const birth_year = document.getElementById('reg-birth-year').value.trim();
+    const parentName = document.getElementById('reg-parent-name').value.trim();
+    const errEl      = document.getElementById('register-error');
+    errEl.style.display = 'none';
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true }
+    });
+
+    if (error) {
+      errEl.textContent = '⚠️ ' + error.message;
+      errEl.style.display = 'block';
+      return;
+    }
+
+    // Store registration data in localStorage (persists across tabs/devices)
+    // so it survives the magic link opening in a new tab or on mobile.
+    localStorage.setItem('reg_name', name);
+    localStorage.setItem('reg_birth_year', birth_year);
+    localStorage.setItem('reg_parent_name', parentName);
+
+    showStatus('Check your email for a sign-in link');
   });
+
+  // Login form handler
+  document.getElementById('login-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false }
+    });
+
+    if (error) {
+      errEl.textContent = '⚠️ ' + error.message;
+      errEl.style.display = 'block';
+      return;
+    }
+
+    showStatus('Check your email for a sign-in link');
+  });
+
+  function showStatus(msg) {
+    const el = document.getElementById('gate-status');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('register-section').style.display = 'none';
+    document.getElementById('login-section').style.display = 'none';
+  }
+})();
 </script>
 </body>
 </html>

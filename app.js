@@ -1,26 +1,39 @@
 // ── Auth guard (include on every inner page) ──────────────────────────────
-function requireAuth() {
-  if (!sessionStorage.getItem('whanau_auth')) {
-    window.location.href = 'index.html';
+async function requireAuth() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = 'index.html';
+    }
+  } catch (err) {
+    console.error('Auth check failed:', err);
+    document.body.innerHTML = '<p style="padding:2rem;text-align:center">Could not connect. Please check your connection and refresh.</p>';
   }
 }
 
-function getUser() {
-  return {
-    name:     sessionStorage.getItem('whanau_name') || 'Whānau',
-    relation: sessionStorage.getItem('whanau_relation') || '',
-    detail:   sessionStorage.getItem('whanau_detail') || '',
-  };
+async function getUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null, id: null, auth_user_id: null };
+
+  const { data, error } = await supabase
+    .from('whakapapa')
+    .select('id, name, birth_year, death_year, parent_id, auth_user_id')
+    .eq('auth_user_id', session.user.id)
+    .limit(1)
+    .single();
+
+  if (error || !data) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null, id: null, auth_user_id: null };
+  return data;
 }
 
-function logout() {
-  sessionStorage.clear();
+async function logout() {
+  await supabase.auth.signOut();
   window.location.href = 'index.html';
 }
 
 // ── Shared header renderer ────────────────────────────────────────────────
-function renderHeader(activePage) {
-  const user = getUser();
+async function renderHeader(activePage) {
+  const user = await getUser();
   const pages = [
     { href: 'home.html',       label: 'Kāinga',     key: 'home' },
     { href: 'whakapapa.html',  label: 'Whakapapa',  key: 'whakapapa' },
@@ -47,49 +60,61 @@ function renderHeader(activePage) {
   `);
 }
 
-// ── Bookings data store (sessionStorage-backed) ───────────────────────────
-function getBookings() {
-  const raw = localStorage.getItem('whanau_bookings');
-  return raw ? JSON.parse(raw) : [
-    { id: 1, venue: 'hall',         date: '2025-08-02', name: 'Tūhoe Reunion',        bookedBy: 'Hemi Tūhoe' },
-    { id: 2, venue: 'meetinghouse', date: '2025-08-09', name: 'Karakia & Hui',         bookedBy: 'Aroha Ngāti' },
-    { id: 3, venue: 'hall',         date: '2025-08-16', name: 'Birthday Celebration',  bookedBy: 'Rangi Pakahi' },
-    { id: 4, venue: 'meetinghouse', date: '2025-08-23', name: 'Whakapapa Workshop',    bookedBy: 'Mere Tūhoe' },
-  ];
+// ── Bookings data store (Supabase-backed) ────────────────────────────────
+
+/**
+ * Pure function: returns true if two booking date ranges overlap.
+ * Adjacent bookings (newStart === existingEnd) are NOT considered overlapping.
+ * @param {string} existingStart - ISO date string
+ * @param {string} existingEnd   - ISO date string
+ * @param {string} newStart      - ISO date string
+ * @param {string} newEnd        - ISO date string
+ * @returns {boolean}
+ */
+function bookingsOverlap(existingStart, existingEnd, newStart, newEnd) {
+  return existingStart < newEnd && existingEnd > newStart;
 }
 
-function saveBookings(bookings) {
-  localStorage.setItem('whanau_bookings', JSON.stringify(bookings));
+async function getBookings() {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .order('start_date', { ascending: true });
+  if (error) { console.error('getBookings error:', error); return []; }
+  return data;
 }
 
-// ── Announcements data ────────────────────────────────────────────────────
-const ANNOUNCEMENTS = [
-  {
-    id: 1,
-    date: '2025-07-28',
-    title: 'Annual Whānau Hui — Save the Date',
-    body: 'Our annual gathering will be held on 23 August 2025 at the meeting house. All whānau are warmly invited. Bring a plate!',
-    tag: 'event',
-  },
-  {
-    id: 2,
-    date: '2025-07-20',
-    title: 'Hall Maintenance — Closed 5–6 Aug',
-    body: 'The hall will be closed for roof repairs on 5 and 6 August. Please plan bookings accordingly.',
-    tag: 'urgent',
-  },
-  {
-    id: 3,
-    date: '2025-07-15',
-    title: 'Whakapapa Records Update',
-    body: 'New records have been added to the family tree. Check the Whakapapa page to see the latest additions from the Tūhoe branch.',
-    tag: 'info',
-  },
-  {
-    id: 4,
-    date: '2025-07-01',
-    title: 'Scholarship Applications Open',
-    body: 'Applications for the Ngāti Pakahi education scholarship are now open. Contact the secretary for the application form.',
-    tag: 'info',
-  },
-];
+async function saveBookings(bookings) {
+  // Kept for backwards compatibility — prefer direct supabase calls in page scripts.
+  const { error } = await supabase
+    .from('bookings')
+    .upsert(bookings, { onConflict: 'id' });
+  if (error) console.error('saveBookings error:', error);
+}
+
+// ── Announcements data (Supabase-backed) ──────────────────────────────────
+async function getAnnouncements() {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .order('date', { ascending: false });
+  if (error) { console.error('getAnnouncements error:', error); return []; }
+  return data;
+}
+
+// ── Whakapapa / family data (Supabase-backed) ─────────────────────────────
+async function getFamilyData() {
+  const { data, error } = await supabase
+    .from('whakapapa')
+    .select('*')
+    .order('id', { ascending: true });
+  if (error) { console.error('getFamilyData error:', error); return []; }
+  return data;
+}
+
+async function saveFamilyData(data) {
+  const { error } = await supabase
+    .from('whakapapa')
+    .upsert(data, { onConflict: 'id' });
+  if (error) console.error('saveFamilyData error:', error);
+}

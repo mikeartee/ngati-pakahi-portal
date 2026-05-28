@@ -88,9 +88,9 @@
 
 <script>
   // ── Auth callback ──────────────────────────────────────────────────────
-  // onAuthStateChange fires when Supabase processes the #access_token hash
-  // fragment from the magic link, establishing the session automatically.
+  // Only redirect on a new SIGNED_IN event, not on initial session restore.
   supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event !== 'SIGNED_IN') return;
     if (!session) return;
 
     // Check if this user already has a whakapapa row
@@ -207,6 +207,7 @@
 
   // ── Dev password login ─────────────────────────────────────────────────
   document.getElementById('dev-login-btn').addEventListener('click', async function () {
+    console.log('dev login button clicked');
     const email    = document.getElementById('dev-email').value.trim();
     const password = document.getElementById('dev-password').value;
     const errEl    = document.getElementById('dev-login-error');

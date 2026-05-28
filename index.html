@@ -72,12 +72,13 @@
 </div>
 
 <script>
-(async function () {
-  // ── Auth callback: check for an existing session on page load ──────────
-  const { data: { session } } = await supabase.auth.getSession();
+  // ── Auth callback ──────────────────────────────────────────────────────
+  // onAuthStateChange fires when Supabase processes the #access_token hash
+  // fragment from the magic link, establishing the session automatically.
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (!session) return;
 
-  if (session) {
-    // User has a valid session — check if they already have a whakapapa row
+    // Check if this user already has a whakapapa row
     const { data: rows } = await supabase
       .from('whakapapa')
       .select('id')
@@ -85,20 +86,16 @@
       .limit(1);
 
     if (rows && rows.length > 0) {
-      // Existing member — go straight to home
       window.location.href = 'home.html';
       return;
     }
 
-    // New user who just clicked their magic link — create whakapapa row.
-    // Registration data is stored in localStorage (not sessionStorage) so it
-    // survives the magic link opening in a new tab or on a different device.
+    // New user — create whakapapa row from localStorage registration data
     const name        = localStorage.getItem('reg_name');
     const birth_year  = parseInt(localStorage.getItem('reg_birth_year')) || null;
     const parent_name = localStorage.getItem('reg_parent_name');
 
     if (name && parent_name) {
-      // Look up parent by name (case-insensitive)
       const { data: parentRows } = await supabase
         .from('whakapapa')
         .select('id')
@@ -107,8 +104,6 @@
 
       const parent_id = parentRows?.length ? parentRows[0].id : null;
 
-      // Use upsert with ignoreDuplicates to prevent duplicate rows if the
-      // magic link is clicked more than once.
       await supabase.from('whakapapa').upsert({
         name,
         email: session.user.email,
@@ -124,12 +119,9 @@
     }
 
     window.location.href = 'home.html';
-    return;
-  }
+  });
 
-  // ── No session — show the gate forms ──────────────────────────────────
-
-  // Registration form handler
+  // ── Registration form ──────────────────────────────────────────────────
   document.getElementById('register-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const name       = document.getElementById('reg-name').value.trim();
@@ -152,8 +144,8 @@
       return;
     }
 
-    // Store registration data in localStorage (persists across tabs/devices)
-    // so it survives the magic link opening in a new tab or on mobile.
+    // Store registration data in localStorage so it survives the magic link
+    // opening in a new tab or on a different device.
     localStorage.setItem('reg_name', name);
     localStorage.setItem('reg_birth_year', birth_year);
     localStorage.setItem('reg_parent_name', parentName);
@@ -161,7 +153,7 @@
     showStatus('Check your email for a sign-in link');
   });
 
-  // Login form handler
+  // ── Login form ─────────────────────────────────────────────────────────
   document.getElementById('login-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
@@ -191,7 +183,6 @@
     document.getElementById('register-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'none';
   }
-})();
 </script>
 </body>
 </html>

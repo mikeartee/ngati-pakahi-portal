@@ -227,12 +227,15 @@
       return;
     }
 
+    console.log('calling signInWithPassword for', email);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log('signInWithPassword result:', { data, error });
     if (error) {
       errEl.textContent = '⚠️ ' + error.message;
       errEl.style.display = 'block';
       return;
     }
+    console.log('redirecting to home.html');
     window.location.href = 'home.html';
   });
 </script>

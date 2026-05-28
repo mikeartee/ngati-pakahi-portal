@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
   <script src="supabase.js"></script>
 </head>
 <body>
@@ -66,39 +66,16 @@
         </button>
         <p class="error-msg" id="login-error"></p>
       </form>
-
-      <!-- Dev password login — remove before production -->
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-        <p style="font-size:0.8rem;color:#888;margin-bottom:8px">Dev login (password)</p>
-        <div class="form-group">
-          <label for="dev-email">Email</label>
-          <input type="email" id="dev-email" />
-        </div>
-        <div class="form-group">
-          <label for="dev-password">Password</label>
-          <input type="password" id="dev-password" />
-        </div>
-        <button type="button" id="dev-login-btn" class="btn btn-outline" style="width:100%">Sign in with password</button>
-        <p class="error-msg" id="dev-login-error"></p>
-      </div>
     </div>
 
   </div>
 </div>
 
 <script>
-  // ── On page load: redirect if already logged in ────────────────────────
-  (async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      window.location.href = 'home.html';
-    }
-  })();
-
   // ── Auth callback ──────────────────────────────────────────────────────
-  // Only redirect on a new SIGNED_IN event, not on initial session restore.
+  // onAuthStateChange fires when Supabase processes the #access_token hash
+  // fragment from the magic link, establishing the session automatically.
   supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event !== 'SIGNED_IN') return;
     if (!session) return;
 
     // Check if this user already has a whakapapa row
@@ -212,33 +189,6 @@
     document.getElementById('register-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'none';
   }
-
-  // ── Dev password login ─────────────────────────────────────────────────
-  document.getElementById('dev-login-btn').addEventListener('click', async function () {
-    console.log('dev login button clicked');
-    const email    = document.getElementById('dev-email').value.trim();
-    const password = document.getElementById('dev-password').value;
-    const errEl    = document.getElementById('dev-login-error');
-    errEl.style.display = 'none';
-
-    if (!email || !password) {
-      errEl.textContent = '⚠️ Enter email and password';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    console.log('calling signInWithPassword for', email);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    console.log('signInWithPassword result:', { data, error });
-    if (error) {
-      errEl.textContent = '⚠️ ' + error.message;
-      errEl.style.display = 'block';
-      return;
-    }
-    console.log('redirecting to home.html');
-    window.location.href = 'home.html';
-  });
 </script>
 </body>
 </html>
-

@@ -251,12 +251,3 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row
   execute function public.handle_new_user();
-
--- ---------------------------------------------------------------------------
--- 10. Grant table permissions to authenticated role
--- ---------------------------------------------------------------------------
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.announcements TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.bookings TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.whakapapa TO authenticated;
-GRANT SELECT, INSERT ON public.profiles TO authenticated;

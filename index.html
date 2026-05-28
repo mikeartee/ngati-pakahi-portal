@@ -66,6 +66,23 @@
         </button>
         <p class="error-msg" id="login-error"></p>
       </form>
+
+      <!-- Dev password login — remove before production -->
+      <details style="margin-top:16px;font-size:0.85rem">
+        <summary style="cursor:pointer;color:#888">Dev login (password)</summary>
+        <form id="dev-login-form" style="margin-top:10px">
+          <div class="form-group">
+            <label for="dev-email">Email</label>
+            <input type="email" id="dev-email" required />
+          </div>
+          <div class="form-group">
+            <label for="dev-password">Password</label>
+            <input type="password" id="dev-password" required />
+          </div>
+          <button type="submit" class="btn btn-outline" style="width:100%">Sign in with password</button>
+          <p class="error-msg" id="dev-login-error"></p>
+        </form>
+      </details>
     </div>
 
   </div>
@@ -189,6 +206,22 @@
     document.getElementById('register-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'none';
   }
+
+  // ── Dev password login ─────────────────────────────────────────────────
+  document.getElementById('dev-login-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const email    = document.getElementById('dev-email').value.trim();
+    const password = document.getElementById('dev-password').value;
+    const errEl    = document.getElementById('dev-login-error');
+    errEl.style.display = 'none';
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      errEl.textContent = '⚠️ ' + error.message;
+      errEl.style.display = 'block';
+    }
+    // onAuthStateChange will handle the redirect on success
+  });
 </script>
 </body>
 </html>

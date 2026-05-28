@@ -8,16 +8,16 @@ async function requireAuth() {
 
 async function getUser() {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null };
+  if (!session) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null, id: null, auth_user_id: null };
 
   const { data, error } = await supabase
     .from('whakapapa')
-    .select('name, birth_year, death_year, parent_id')
+    .select('id, name, birth_year, death_year, parent_id, auth_user_id')
     .eq('auth_user_id', session.user.id)
     .limit(1)
     .single();
 
-  if (error || !data) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null };
+  if (error || !data) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null, id: null, auth_user_id: null };
   return data;
 }
 

@@ -12,8 +12,11 @@
     .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
     .search-bar input { flex: 1; }
     .highlight rect { stroke: var(--gold) !important; stroke-width: 3px !important; }
-    .add-form { background: #f5f0e8; border-radius: 8px; padding: 18px; margin-top: 16px; display: none; }
     .gen-label { font-size: 0.72rem; fill: #888; font-style: italic; }
+    .popup-edit-section { margin-top: 12px; border-top: 1px solid #e0d8cc; padding-top: 12px; }
+    .popup-edit-section label { display: block; font-size: 0.8rem; color: #666; margin-bottom: 2px; }
+    .popup-edit-section input { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .popup-save-btn { width: 100%; }
   </style>
 </head>
 <body>
@@ -24,7 +27,6 @@
   <div class="card" style="margin-bottom:20px">
     <div class="flex-between">
       <div class="card-title" style="border:none;margin:0;padding:0">🌳 Whakapapa — Family Tree</div>
-      <button class="btn btn-outline" id="add-btn" style="font-size:0.82rem;padding:6px 14px">+ Add Member</button>
     </div>
     <p class="text-muted mt-12">Click any person to see their details. The tree flows from our matriarch at the top.</p>
 
@@ -32,32 +34,6 @@
       <input type="text" id="search-input" placeholder="Search by name…" />
       <button class="btn btn-primary" onclick="searchTree()">Search</button>
       <button class="btn btn-outline" onclick="clearSearch()">Clear</button>
-    </div>
-
-    <!-- Add member form -->
-    <div class="add-form" id="add-form">
-      <div class="two-col">
-        <div class="form-group">
-          <label>Full Name</label>
-          <input type="text" id="af-name" placeholder="e.g. Hemi Tūhoe" />
-        </div>
-        <div class="form-group">
-          <label>Birth Year</label>
-          <input type="text" id="af-birth" placeholder="e.g. 1985" />
-        </div>
-        <div class="form-group">
-          <label>Parent (name must match exactly)</label>
-          <input type="text" id="af-parent" placeholder="e.g. Rangi Pakahi" />
-        </div>
-        <div class="form-group">
-          <label>Notes</label>
-          <input type="text" id="af-notes" placeholder="e.g. Lives in Auckland" />
-        </div>
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-primary" onclick="addMember()">Add to Tree</button>
-        <button class="btn btn-outline" onclick="toggleAddForm()">Cancel</button>
-      </div>
     </div>
   </div>
 
@@ -72,8 +48,14 @@
   <h3 id="pp-name"></h3>
   <p id="pp-birth"></p>
   <p id="pp-relation"></p>
-  <p id="pp-notes"></p>
   <p id="pp-children"></p>
+  <div id="pp-edit-section" class="popup-edit-section" style="display:none">
+    <label for="pp-edit-birth">Birth Year</label>
+    <input type="number" id="pp-edit-birth" placeholder="e.g. 1950" />
+    <label for="pp-edit-death">Death Year</label>
+    <input type="number" id="pp-edit-death" placeholder="Leave blank if living" />
+    <button class="btn btn-primary popup-save-btn" id="pp-save-btn">Save</button>
+  </div>
 </div>
 
 <footer>
@@ -84,14 +66,19 @@
 // ── Layout engine ──────────────────────────────────────────────────────────
 const NODE_W = 150, NODE_H = 52, H_GAP = 20, V_GAP = 70;
 
+// In-memory people array — loaded once on page load, refreshed after edits
+let _people = [];
+// Set of person ids the current user may edit
+let _editableIds = new Set();
+
 function buildLayout(people) {
-  // Group by generation depth
+  // Group by generation depth using parent_id
   const depthMap = {};
   function depth(id) {
     if (depthMap[id] !== undefined) return depthMap[id];
     const p = people.find(x => x.id === id);
-    if (!p || p.parent === null) { depthMap[id] = 0; return 0; }
-    depthMap[id] = depth(p.parent) + 1;
+    if (!p || p.parent_id === null) { depthMap[id] = 0; return 0; }
+    depthMap[id] = depth(p.parent_id) + 1;
     return depthMap[id];
   }
   people.forEach(p => depth(p.id));
@@ -128,8 +115,8 @@ function buildLayout(people) {
 }
 
 // ── Render SVG ─────────────────────────────────────────────────────────────
-async function renderTree() {
-  const people = await getFamilyData();
+function renderTree(people) {
+  _people = people;
   const { positions, maxDepth, maxRowW } = buildLayout(people);
 
   const svgW = maxRowW + 40;
@@ -144,9 +131,9 @@ async function renderTree() {
 
   // Draw edges first
   people.forEach(p => {
-    if (p.parent === null) return;
+    if (p.parent_id === null) return;
     const child  = positions[p.id];
-    const parent = positions[p.parent];
+    const parent = positions[p.parent_id];
     if (!parent) return;
     const x1 = parent.x + NODE_W / 2 + PAD;
     const y1 = parent.y + NODE_H + PAD;
@@ -165,7 +152,7 @@ async function renderTree() {
   people.forEach(p => {
     const pos = positions[p.id];
     const x = pos.x + PAD, y = pos.y + PAD;
-    const isRoot = p.parent === null;
+    const isRoot = p.parent_id === null;
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'tree-node-group');
@@ -184,18 +171,17 @@ async function renderTree() {
     // Name text
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', x + NODE_W / 2);
-    text.setAttribute('y', y + (p.birth ? 20 : 28));
+    text.setAttribute('y', y + (p.birth_year ? 20 : 28));
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('font-size', '12');
     text.setAttribute('font-weight', '700');
     text.setAttribute('fill', isRoot ? 'white' : '#1a1a1a');
     text.setAttribute('font-family', 'Segoe UI, sans-serif');
-    // Truncate long names
     const displayName = p.name.length > 20 ? p.name.slice(0, 19) + '…' : p.name;
     text.textContent = displayName;
     g.appendChild(text);
 
-    if (p.birth) {
+    if (p.birth_year) {
       const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       sub.setAttribute('x', x + NODE_W / 2);
       sub.setAttribute('y', y + 36);
@@ -203,7 +189,7 @@ async function renderTree() {
       sub.setAttribute('font-size', '10');
       sub.setAttribute('fill', isRoot ? 'rgba(255,255,255,0.75)' : '#888');
       sub.setAttribute('font-family', 'Segoe UI, sans-serif');
-      sub.textContent = p.death ? `${p.birth} – ${p.death}` : `b. ${p.birth}`;
+      sub.textContent = p.death_year ? `${p.birth_year} – ${p.death_year}` : `b. ${p.birth_year}`;
       g.appendChild(sub);
     }
 
@@ -212,34 +198,66 @@ async function renderTree() {
 }
 
 // ── Popup ──────────────────────────────────────────────────────────────────
-async function showPopup(person, e) {
-  const people = await getFamilyData();
-  const children = people.filter(p => p.parent === person.id);
-  const parent   = people.find(p => p.id === person.parent);
+function showPopup(person, e) {
+  const people = _people;
+  const children = people.filter(p => p.parent_id === person.id);
+  const parent   = people.find(p => p.id === person.parent_id);
 
   document.getElementById('pp-name').textContent    = person.name;
-  document.getElementById('pp-birth').textContent   = person.birth ? `Born: ${person.birth}${person.death ? ' · Died: ' + person.death : ''}` : '';
+  document.getElementById('pp-birth').textContent   = person.birth_year
+    ? `Born: ${person.birth_year}${person.death_year ? ' · Died: ' + person.death_year : ''}`
+    : '';
   document.getElementById('pp-relation').textContent = parent ? `Child of: ${parent.name}` : '👑 Matriarch';
-  document.getElementById('pp-notes').textContent   = person.notes || '';
-  document.getElementById('pp-children').textContent = children.length ? `Children: ${children.map(c => c.name).join(', ')}` : '';
+  document.getElementById('pp-children').textContent = children.length
+    ? `Children: ${children.map(c => c.name).join(', ')}`
+    : '';
+
+  const editSection = document.getElementById('pp-edit-section');
+  if (_editableIds.has(person.id)) {
+    document.getElementById('pp-edit-birth').value = person.birth_year || '';
+    document.getElementById('pp-edit-death').value = person.death_year || '';
+    document.getElementById('pp-save-btn').onclick = () => updatePersonDates(
+      person.id,
+      document.getElementById('pp-edit-birth').value,
+      document.getElementById('pp-edit-death').value
+    );
+    editSection.style.display = 'block';
+  } else {
+    editSection.style.display = 'none';
+  }
 
   const popup = document.getElementById('person-popup');
   popup.style.display = 'block';
   popup.style.left = Math.min(e.clientX + 12, window.innerWidth - 320) + 'px';
-  popup.style.top  = Math.min(e.clientY + 12, window.innerHeight - 200) + 'px';
+  popup.style.top  = Math.min(e.clientY + 12, window.innerHeight - 260) + 'px';
 }
 
 function closePopup() {
   document.getElementById('person-popup').style.display = 'none';
 }
 
-// ── Search ─────────────────────────────────────────────────────────────────
-async function searchTree() {
-  const q = document.getElementById('search-input').value.trim().toLowerCase();
+// ── Update birth/death years ───────────────────────────────────────────────
+async function updatePersonDates(id, birthYear, deathYear) {
+  const { error } = await supabase
+    .from('whakapapa')
+    .update({
+      birth_year: birthYear ? parseInt(birthYear) : null,
+      death_year: deathYear ? parseInt(deathYear) : null
+    })
+    .eq('id', id);
+  if (error) { alert('Could not save changes.'); return; }
+  // Reload tree
   const people = await getFamilyData();
+  renderTree(people);
+  closePopup();
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+function searchTree() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
   document.querySelectorAll('.tree-node-group').forEach(g => {
     const id = parseInt(g.getAttribute('data-id'));
-    const person = people.find(p => p.id === id);
+    const person = _people.find(p => p.id === id);
     g.classList.toggle('highlight', person && person.name.toLowerCase().includes(q) && q.length > 0);
   });
 }
@@ -249,36 +267,40 @@ function clearSearch() {
   document.querySelectorAll('.tree-node-group').forEach(g => g.classList.remove('highlight'));
 }
 
-// ── Add member ─────────────────────────────────────────────────────────────
-function toggleAddForm() {
-  const f = document.getElementById('add-form');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-document.getElementById('add-btn').addEventListener('click', toggleAddForm);
-
-async function addMember() {
-  const name   = document.getElementById('af-name').value.trim();
-  const birth  = document.getElementById('af-birth').value.trim();
-  const pName  = document.getElementById('af-parent').value.trim();
-  const notes  = document.getElementById('af-notes').value.trim();
-  if (!name) return alert('Please enter a name.');
-
-  const people = await getFamilyData();
-  const parent = people.find(p => p.name.toLowerCase() === pName.toLowerCase());
-  const newId  = Math.max(...people.map(p => p.id)) + 1;
-  const newMember = { id: newId, name, birth: birth || null, death: null, parent: parent ? parent.id : null, notes };
-  await saveFamilyData([...people, newMember]);
-  toggleAddForm();
-  await renderTree();
-}
-
 // Close popup on outside click
 document.addEventListener('click', e => {
   const popup = document.getElementById('person-popup');
   if (!popup.contains(e.target) && !e.target.closest('.tree-node-group')) closePopup();
 });
 
-renderTree();
+// ── Page initialisation ────────────────────────────────────────────────────
+(async function init() {
+  const [people, currentUser] = await Promise.all([getFamilyData(), getUser()]);
+
+  // Build editable set: self, parent, children, siblings
+  if (currentUser.id !== null) {
+    // Self
+    _editableIds.add(currentUser.id);
+    // Parent
+    if (currentUser.parent_id !== null) {
+      _editableIds.add(currentUser.parent_id);
+    }
+    // Children (people whose parent_id === currentUser.id)
+    people.forEach(p => {
+      if (p.parent_id === currentUser.id) _editableIds.add(p.id);
+    });
+    // Siblings (same parent, not self)
+    if (currentUser.parent_id !== null) {
+      people.forEach(p => {
+        if (p.parent_id === currentUser.parent_id && p.id !== currentUser.id) {
+          _editableIds.add(p.id);
+        }
+      });
+    }
+  }
+
+  renderTree(people);
+})();
 </script>
 </body>
 </html>

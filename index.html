@@ -87,6 +87,14 @@
 </div>
 
 <script>
+  // ── On page load: redirect if already logged in ────────────────────────
+  (async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      window.location.href = 'home.html';
+    }
+  })();
+
   // ── Auth callback ──────────────────────────────────────────────────────
   // Only redirect on a new SIGNED_IN event, not on initial session restore.
   supabase.auth.onAuthStateChange(async (event, session) => {

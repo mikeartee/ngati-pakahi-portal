@@ -18,7 +18,7 @@
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth(); renderHeader('whakapapa');</script>
+<script>requireAuth().then(() => renderHeader('whakapapa'));</script>
 
 <main>
   <div class="card" style="margin-bottom:20px">

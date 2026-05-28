@@ -10,7 +10,7 @@
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth(); renderHeader('home');</script>
+<script>requireAuth().then(() => renderHeader('home'));</script>
 
 <main>
 

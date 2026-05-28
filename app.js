@@ -1,26 +1,34 @@
 // ── Auth guard (include on every inner page) ──────────────────────────────
-function requireAuth() {
-  if (!sessionStorage.getItem('whanau_auth')) {
+async function requireAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
     window.location.href = 'index.html';
   }
 }
 
-function getUser() {
-  return {
-    name:     sessionStorage.getItem('whanau_name') || 'Whānau',
-    relation: sessionStorage.getItem('whanau_relation') || '',
-    detail:   sessionStorage.getItem('whanau_detail') || '',
-  };
+async function getUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null };
+
+  const { data, error } = await supabase
+    .from('whakapapa')
+    .select('name, birth_year, death_year, parent_id')
+    .eq('auth_user_id', session.user.id)
+    .limit(1)
+    .single();
+
+  if (error || !data) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null };
+  return data;
 }
 
-function logout() {
-  sessionStorage.clear();
+async function logout() {
+  await supabase.auth.signOut();
   window.location.href = 'index.html';
 }
 
 // ── Shared header renderer ────────────────────────────────────────────────
-function renderHeader(activePage) {
-  const user = getUser();
+async function renderHeader(activePage) {
+  const user = await getUser();
   const pages = [
     { href: 'home.html',       label: 'Kāinga',     key: 'home' },
     { href: 'whakapapa.html',  label: 'Whakapapa',  key: 'whakapapa' },

@@ -10,7 +10,7 @@
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth(); renderHeader('bookings');</script>
+<script>requireAuth().then(() => renderHeader('bookings'));</script>
 
 <main>
   <div class="two-col" style="align-items:start">
@@ -93,7 +93,8 @@
     currentMonth = now.getMonth();
 
     // Pre-fill name from session
-    document.getElementById('b-name').value = getUser().name;
+    const currentUser = await getUser();
+    document.getElementById('b-name').value = currentUser.name;
 
     await renderCalendar();
     await renderBookingLists();
@@ -174,7 +175,8 @@
     msg.style.color = 'var(--koru-green)';
     msg.textContent = `✅ Booking confirmed for ${formatDate(date)}!`;
     e.target.reset();
-    document.getElementById('b-name').value = getUser().name;
+    const currentUser = await getUser();
+    document.getElementById('b-name').value = currentUser.name;
 
     await renderCalendar();
     await renderBookingLists();
@@ -183,7 +185,8 @@
   // ── Booking lists ───────────────────────────────────────────────────────
   async function renderBookingLists() {
     const all  = (await getBookings()).sort((a,b) => a.date.localeCompare(b.date));
-    const mine = all.filter(b => b.bookedBy === getUser().name);
+    const currentUser = await getUser();
+    const mine = all.filter(b => b.bookedBy === currentUser.name);
     document.getElementById('tab-all').innerHTML  = renderList(all);
     document.getElementById('tab-mine').innerHTML = renderList(mine, true);
   }

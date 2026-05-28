@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bookings — Ngāti Pakahi O Mangaiti</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
 </head>
 <body>
 <script src="app.js"></script>
@@ -85,7 +87,7 @@
 <script>
   let currentYear, currentMonth;
 
-  function init() {
+  async function init() {
     const now = new Date();
     currentYear  = now.getFullYear();
     currentMonth = now.getMonth();
@@ -93,11 +95,11 @@
     // Pre-fill name from session
     document.getElementById('b-name').value = getUser().name;
 
-    renderCalendar();
-    renderBookingLists();
+    await renderCalendar();
+    await renderBookingLists();
 
-    document.getElementById('prev-month').addEventListener('click', () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } renderCalendar(); });
-    document.getElementById('next-month').addEventListener('click', () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } renderCalendar(); });
+    document.getElementById('prev-month').addEventListener('click', async () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } await renderCalendar(); });
+    document.getElementById('next-month').addEventListener('click', async () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } await renderCalendar(); });
     document.getElementById('booking-form').addEventListener('submit', handleBooking);
   }
 
@@ -105,13 +107,13 @@
   const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  function renderCalendar() {
+  async function renderCalendar() {
     document.getElementById('cal-month-label').textContent = `${MONTH_NAMES[currentMonth]} ${currentYear}`;
 
     // Headers
     document.getElementById('cal-headers').innerHTML = DAY_NAMES.map(d => `<div class="cal-header">${d}</div>`).join('');
 
-    const bookings = getBookings();
+    const bookings = await getBookings();
     const today = new Date().toISOString().slice(0,10);
     const firstDay = new Date(currentYear, currentMonth, 1).getDay();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -148,7 +150,7 @@
   }
 
   // ── Booking form ────────────────────────────────────────────────────────
-  function handleBooking(e) {
+  async function handleBooking(e) {
     e.preventDefault();
     const name    = document.getElementById('b-name').value.trim();
     const venue   = document.getElementById('b-venue').value;
@@ -156,7 +158,7 @@
     const purpose = document.getElementById('b-purpose').value.trim();
     const msg     = document.getElementById('booking-msg');
 
-    const bookings = getBookings();
+    const bookings = await getBookings();
     const conflict = bookings.find(b => b.date === date && b.venue === venue);
     if (conflict) {
       msg.style.display = 'block';
@@ -165,8 +167,8 @@
       return;
     }
 
-    bookings.push({ id: Date.now(), venue, date, name: purpose, bookedBy: name });
-    saveBookings(bookings);
+    const newBooking = { id: Date.now(), venue, date, name: purpose, bookedBy: name };
+    await saveBookings([...bookings, newBooking]);
 
     msg.style.display = 'block';
     msg.style.color = 'var(--koru-green)';
@@ -174,13 +176,13 @@
     e.target.reset();
     document.getElementById('b-name').value = getUser().name;
 
-    renderCalendar();
-    renderBookingLists();
+    await renderCalendar();
+    await renderBookingLists();
   }
 
   // ── Booking lists ───────────────────────────────────────────────────────
-  function renderBookingLists() {
-    const all  = getBookings().sort((a,b) => a.date.localeCompare(b.date));
+  async function renderBookingLists() {
+    const all  = (await getBookings()).sort((a,b) => a.date.localeCompare(b.date));
     const mine = all.filter(b => b.bookedBy === getUser().name);
     document.getElementById('tab-all').innerHTML  = renderList(all);
     document.getElementById('tab-mine').innerHTML = renderList(mine, true);
@@ -204,11 +206,12 @@
     `).join('');
   }
 
-  function deleteBooking(id) {
+  async function deleteBooking(id) {
     if (!confirm('Cancel this booking?')) return;
-    saveBookings(getBookings().filter(b => b.id !== id));
-    renderCalendar();
-    renderBookingLists();
+    const bookings = await getBookings();
+    await saveBookings(bookings.filter(b => b.id !== id));
+    await renderCalendar();
+    await renderBookingLists();
   }
 
   function switchTab(tab, btn) {

@@ -111,15 +111,33 @@
   }
   document.getElementById('compose-btn').addEventListener('click', toggleCompose);
 
+  async function checkTrustee() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return false;
+    const { data } = await supabase
+      .from('profiles')
+      .select('is_trustee')
+      .eq('id', session.user.id)
+      .single();
+    return data?.is_trustee === true;
+  }
+
   async function postAnnouncement() {
     const title = document.getElementById('new-title').value.trim();
     const body  = document.getElementById('new-body').value.trim();
     const tag   = document.getElementById('new-tag').value;
     if (!title || !body) return alert('Please fill in both title and message.');
-    const { error } = await supabase
-      .from('announcements')
-      .insert([{ date: new Date().toISOString().slice(0,10), title, body, tag }]);
-    if (error) { console.error('postAnnouncement error:', error); return; }
+
+    const user = await getUser();
+    const { error } = await supabase.from('announcements').insert({
+      title,
+      body,
+      tag,
+      posted_by: user.name,
+      date: new Date().toISOString().slice(0, 10)
+    });
+    if (error) { alert('Could not post announcement.'); return; }
+
     document.getElementById('new-title').value = '';
     document.getElementById('new-body').value = '';
     toggleCompose();
@@ -152,8 +170,14 @@
     `).join('');
   }
 
-  renderAnnouncements();
-  renderUpcoming();
+  (async () => {
+    await renderAnnouncements();
+    await renderUpcoming();
+    const isTrustee = await checkTrustee();
+    if (!isTrustee) {
+      document.getElementById('compose-btn').style.display = 'none';
+    }
+  })();
 </script>
 </body>
 </html>

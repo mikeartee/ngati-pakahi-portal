@@ -10,7 +10,7 @@
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth().then(() => renderHeader('bookings'));</script>
+<script>requireAuth().then(() => { renderHeader('bookings'); init(); });</script>
 
 <main>
   <div class="two-col" style="align-items:start">
@@ -257,7 +257,7 @@
     return new Date(d).toLocaleDateString('en-NZ', { day:'numeric', month:'long', year:'numeric' });
   }
 
-  init();
+  // init() is called from requireAuth().then() in the script tag above
 </script>
 </body>
 </html>

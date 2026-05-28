@@ -1,7 +1,10 @@
 -- =============================================================================
 -- 001_initial_schema.sql
 -- Initial schema migration for Ngati Pakahi O Manga Iti
--- Idempotent: safe to re-run (all objects dropped before recreation)
+-- WARNING: This script drops all tables before recreating them.
+-- It is safe to run on a fresh database, but will DESTROY ALL DATA if run
+-- against a database with existing records. Use reset.sql for development
+-- resets only — never run this against production.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -40,7 +43,7 @@ create table public.whakapapa (
   death_year   integer,
   parent_id    bigint      references public.whakapapa(id) on delete set null,
   parent_name  text,
-  auth_user_id uuid        references auth.users(id) on delete set null,
+  auth_user_id uuid        unique references auth.users(id) on delete set null,
   created_at   timestamptz not null default now()
 );
 

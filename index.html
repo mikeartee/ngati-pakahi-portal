@@ -90,10 +90,12 @@
       return;
     }
 
-    // New user who just clicked their magic link — create whakapapa row
-    const name        = sessionStorage.getItem('reg_name');
-    const birth_year  = parseInt(sessionStorage.getItem('reg_birth_year'));
-    const parent_name = sessionStorage.getItem('reg_parent_name');
+    // New user who just clicked their magic link — create whakapapa row.
+    // Registration data is stored in localStorage (not sessionStorage) so it
+    // survives the magic link opening in a new tab or on a different device.
+    const name        = localStorage.getItem('reg_name');
+    const birth_year  = parseInt(localStorage.getItem('reg_birth_year')) || null;
+    const parent_name = localStorage.getItem('reg_parent_name');
 
     if (name && parent_name) {
       // Look up parent by name (case-insensitive)
@@ -105,18 +107,20 @@
 
       const parent_id = parentRows?.length ? parentRows[0].id : null;
 
-      await supabase.from('whakapapa').insert({
+      // Use upsert with ignoreDuplicates to prevent duplicate rows if the
+      // magic link is clicked more than once.
+      await supabase.from('whakapapa').upsert({
         name,
         email: session.user.email,
         birth_year,
         parent_name,
         parent_id,
         auth_user_id: session.user.id
-      });
+      }, { onConflict: 'auth_user_id', ignoreDuplicates: true });
 
-      sessionStorage.removeItem('reg_name');
-      sessionStorage.removeItem('reg_birth_year');
-      sessionStorage.removeItem('reg_parent_name');
+      localStorage.removeItem('reg_name');
+      localStorage.removeItem('reg_birth_year');
+      localStorage.removeItem('reg_parent_name');
     }
 
     window.location.href = 'home.html';
@@ -146,10 +150,11 @@
       return;
     }
 
-    // Store registration data for use after magic link click
-    sessionStorage.setItem('reg_name', name);
-    sessionStorage.setItem('reg_birth_year', birth_year);
-    sessionStorage.setItem('reg_parent_name', parentName);
+    // Store registration data in localStorage (persists across tabs/devices)
+    // so it survives the magic link opening in a new tab or on mobile.
+    localStorage.setItem('reg_name', name);
+    localStorage.setItem('reg_birth_year', birth_year);
+    localStorage.setItem('reg_parent_name', parentName);
 
     showStatus('Check your email for a sign-in link');
   });

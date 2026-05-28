@@ -1,8 +1,13 @@
 // ── Auth guard (include on every inner page) ──────────────────────────────
 async function requireAuth() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    window.location.href = 'index.html';
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = 'index.html';
+    }
+  } catch (err) {
+    console.error('Auth check failed:', err);
+    document.body.innerHTML = '<p style="padding:2rem;text-align:center">Could not connect. Please check your connection and refresh.</p>';
   }
 }
 
@@ -80,7 +85,7 @@ async function getBookings() {
 }
 
 async function saveBookings(bookings) {
-  // Upsert the full list — callers pass the mutated array after push/filter
+  // Kept for backwards compatibility — prefer direct supabase calls in page scripts.
   const { error } = await supabase
     .from('bookings')
     .upsert(bookings, { onConflict: 'id' });

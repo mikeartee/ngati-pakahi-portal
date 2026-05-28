@@ -21,7 +21,7 @@
 </head>
 <body>
 <script src="app.js"></script>
-<script>requireAuth().then(() => renderHeader('whakapapa'));</script>
+<script>requireAuth().then(() => { renderHeader('whakapapa'); initPage(); });</script>
 
 <main>
   <div class="card" style="margin-bottom:20px">
@@ -117,6 +117,24 @@ function buildLayout(people) {
 // ── Render SVG ─────────────────────────────────────────────────────────────
 function renderTree(people) {
   _people = people;
+  const svg = document.getElementById('tree-svg');
+
+  if (!people.length) {
+    svg.setAttribute('width', '300');
+    svg.setAttribute('height', '60');
+    svg.innerHTML = '';
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', '150');
+    text.setAttribute('y', '35');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', '14');
+    text.setAttribute('fill', '#888');
+    text.setAttribute('font-family', 'Segoe UI, sans-serif');
+    text.textContent = 'No members found.';
+    svg.appendChild(text);
+    return;
+  }
+
   const { positions, maxDepth, maxRowW } = buildLayout(people);
 
   const svgW = maxRowW + 40;
@@ -274,7 +292,7 @@ document.addEventListener('click', e => {
 });
 
 // ── Page initialisation ────────────────────────────────────────────────────
-(async function init() {
+async function initPage() {
   const [people, currentUser] = await Promise.all([getFamilyData(), getUser()]);
 
   // Build editable set: self, parent, children, siblings
@@ -300,7 +318,7 @@ document.addEventListener('click', e => {
   }
 
   renderTree(people);
-})();
+}
 </script>
 </body>
 </html>

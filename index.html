@@ -133,7 +133,10 @@
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true }
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: 'https://mikeartee.github.io/ngati-pakahi-portal/index.html'
+      }
     });
 
     if (error) {
@@ -162,7 +165,10 @@
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: false }
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: 'https://mikeartee.github.io/ngati-pakahi-portal/index.html'
+      }
     });
 
     if (error) {

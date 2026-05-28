@@ -20,7 +20,7 @@ async function getUser() {
     .select('id, name, birth_year, death_year, parent_id, auth_user_id')
     .eq('auth_user_id', session.user.id)
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error || !data) return { name: 'Whānau', birth_year: null, death_year: null, parent_id: null, id: null, auth_user_id: null };
   return data;

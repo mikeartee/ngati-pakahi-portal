@@ -201,24 +201,14 @@
     });
   }
 
-  (async () => {
+  async function initPage() {
     await renderAnnouncements();
     await renderUpcoming();
     const isTrustee = await checkTrustee();
     if (isTrustee) {
       document.getElementById('compose-btn').style.display = 'inline-block';
     }
-  })();
-}
-
-async function initPage() {
-  await renderAnnouncements();
-  await renderUpcoming();
-  const isTrustee = await checkTrustee();
-  if (!isTrustee) {
-    document.getElementById('compose-btn').style.display = 'none';
   }
-}
 </script>
 </body>
 </html>

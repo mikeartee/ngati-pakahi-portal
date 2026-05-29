@@ -116,53 +116,91 @@
   })();
 
   // ── Auth callback ──────────────────────────────────────────────────────
-  // onAuthStateChange fires when Supabase processes the #access_token hash
-  // fragment from the magic link, establishing the session automatically.
+  // Fires when Supabase establishes a session — either from the #access_token
+  // hash fragment in a magic link, or from verifyOtp() after the user enters
+  // their 6-digit code. Either way we ensure the whakapapa row exists, then
+  // redirect to home.html.
+  //
+  // IMPORTANT: the redirect must happen even if the database calls fail or
+  // hang. Previously a slow/failed whakapapa query would silently prevent the
+  // redirect, leaving the user stuck on the login page with a valid session.
+  let redirecting = false;
+
+  function goHome() {
+    if (redirecting) return;
+    redirecting = true;
+    window.location.href = 'home.html';
+  }
+
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (!session) return;
 
-    // Check if this user already has a whakapapa row
-    const { data: rows } = await supabase
-      .from('whakapapa')
-      .select('id')
-      .eq('auth_user_id', session.user.id)
-      .limit(1);
+    // Safety net: no matter what happens below, land on home.html within 4s.
+    setTimeout(goHome, 4000);
 
-    if (rows && rows.length > 0) {
-      window.location.href = 'home.html';
-      return;
-    }
-
-    // New user — create whakapapa row from localStorage registration data
-    const name        = localStorage.getItem('reg_name');
-    const birth_year  = parseInt(localStorage.getItem('reg_birth_year')) || null;
-    const parent_name = localStorage.getItem('reg_parent_name');
-
-    if (name && parent_name) {
-      const { data: parentRows } = await supabase
+    try {
+      // Does this user already have a whakapapa row?
+      const { data: rows } = await supabase
         .from('whakapapa')
         .select('id')
-        .ilike('name', parent_name)
+        .eq('auth_user_id', session.user.id)
         .limit(1);
 
-      const parent_id = parentRows?.length ? parentRows[0].id : null;
+      if (rows && rows.length > 0) {
+        goHome();
+        return;
+      }
 
-      await supabase.from('whakapapa').upsert({
-        name,
-        email: session.user.email,
-        birth_year,
-        parent_name,
-        parent_id,
-        auth_user_id: session.user.id
-      }, { onConflict: 'auth_user_id', ignoreDuplicates: true });
+      // New user — create whakapapa row from localStorage registration data
+      const name        = localStorage.getItem('reg_name');
+      const birth_year  = parseInt(localStorage.getItem('reg_birth_year')) || null;
+      const parent_name = localStorage.getItem('reg_parent_name');
 
-      localStorage.removeItem('reg_name');
-      localStorage.removeItem('reg_birth_year');
-      localStorage.removeItem('reg_parent_name');
+      if (name && parent_name) {
+        const { data: parentRows } = await supabase
+          .from('whakapapa')
+          .select('id')
+          .ilike('name', parent_name)
+          .limit(1);
+
+        const parent_id = parentRows?.length ? parentRows[0].id : null;
+
+        await supabase.from('whakapapa').upsert({
+          name,
+          email: session.user.email,
+          birth_year,
+          parent_name,
+          parent_id,
+          auth_user_id: session.user.id
+        }, { onConflict: 'auth_user_id', ignoreDuplicates: true });
+
+        localStorage.removeItem('reg_name');
+        localStorage.removeItem('reg_birth_year');
+        localStorage.removeItem('reg_parent_name');
+      }
+    } catch (err) {
+      // Log but don't block — the safety-net timeout (and the call below)
+      // still send the user to home.html.
+      console.error('Post-sign-in setup failed (continuing to home):', err);
     }
 
-    window.location.href = 'home.html';
+    goHome();
   });
+
+  // Belt-and-braces: if a session already exists when the page loads (e.g. the
+  // magic-link hash was processed before the listener attached, or the user is
+  // already signed in), redirect immediately rather than showing the gate.
+  (async function checkExistingSession() {
+    // Skip if the URL carries an explicit error (handled above).
+    if (window.location.hash.includes('error=')) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) goHome();
+    } catch (err) {
+      console.error('Session check failed:', err);
+    }
+  })();
+
 
   // ── Registration form ──────────────────────────────────────────────────
   document.getElementById('register-form').addEventListener('submit', async function (e) {

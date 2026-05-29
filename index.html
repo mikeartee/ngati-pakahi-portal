@@ -19,6 +19,22 @@
     <!-- Status message (shown after form submission) -->
     <div id="gate-status" style="display:none;background:#e8f5e8;border:1px solid #b0c8a8;border-radius:8px;padding:14px 18px;margin-bottom:18px;color:#2d5a27;font-weight:600;text-align:center;"></div>
 
+    <!-- Code entry section (shown after a sign-in email is sent) -->
+    <div id="code-section" style="display:none">
+      <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">Enter your code</h2>
+      <p style="font-size:0.9rem;color:#555;margin-bottom:12px">We emailed you a 6-digit code. Enter it below to sign in.</p>
+      <form id="code-form">
+        <div class="form-group">
+          <label for="code-input">6-digit code</label>
+          <input type="text" id="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+          Verify &amp; sign in
+        </button>
+        <p class="error-msg" id="code-error"></p>
+      </form>
+    </div>
+
     <!-- Registration section (new users) -->
     <div id="register-section">
       <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">New to the site? Register here</h2>
@@ -72,6 +88,33 @@
 </div>
 
 <script>
+  // Email currently awaiting code verification (set on register/login submit)
+  let pendingEmail = null;
+
+  // ── Show error message if magic link was invalid/expired ────────────────
+  // Supabase puts errors in the URL hash like #error=access_denied&error_description=otp_expired
+  (function showHashError() {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes('error=')) return;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    const errorDescription = params.get('error_description') || params.get('error') || 'Sign-in link is invalid';
+    const friendly = errorDescription.includes('expired')
+      ? 'Your sign-in link has expired or already been used. Please request a new one below.'
+      : 'There was a problem with your sign-in link: ' + errorDescription.replace(/\+/g, ' ') + '. Please request a new one below.';
+    // Show via the existing gate-status banner once DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('gate-status');
+      if (!el) return;
+      el.textContent = '⚠️ ' + friendly;
+      el.style.background = '#fdecea';
+      el.style.borderColor = '#e8a8a0';
+      el.style.color = '#8b2818';
+      el.style.display = 'block';
+    });
+    // Clean the URL so a refresh doesn't re-show the message
+    history.replaceState(null, '', window.location.pathname);
+  })();
+
   // ── Auth callback ──────────────────────────────────────────────────────
   // onAuthStateChange fires when Supabase processes the #access_token hash
   // fragment from the magic link, establishing the session automatically.
@@ -153,7 +196,9 @@
     localStorage.setItem('reg_birth_year', birth_year);
     localStorage.setItem('reg_parent_name', parentName);
 
-    showStatus('Check your email for a sign-in link');
+    // Remember which email we're verifying, then show the code entry form.
+    pendingEmail = email;
+    showCodeEntry('Check your email for a 6-digit sign-in code');
   });
 
   // ── Login form ─────────────────────────────────────────────────────────
@@ -179,7 +224,41 @@
       return;
     }
 
-    showStatus('Check your email for a sign-in link');
+    pendingEmail = email;
+    showCodeEntry('Check your email for a 6-digit sign-in code');
+  });
+
+  // ── Code verification form ───────────────────────────────────────────────
+  // The email contains a 6-digit code as well as a link. Entering the code
+  // avoids the problem where mail-provider security scanners "click" (and
+  // thereby consume) the single-use magic link before the user can.
+  document.getElementById('code-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const token = document.getElementById('code-input').value.trim();
+    const errEl = document.getElementById('code-error');
+    errEl.style.display = 'none';
+
+    if (!pendingEmail) {
+      errEl.textContent = '⚠️ Please request a sign-in code first.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: pendingEmail,
+      token,
+      type: 'email'
+    });
+
+    if (error) {
+      let msg = error.message;
+      if (error.status === 429) msg = 'Too many attempts. Please wait a few minutes and try again.';
+      errEl.textContent = '⚠️ ' + msg;
+      errEl.style.display = 'block';
+      return;
+    }
+    // On success, onAuthStateChange fires with the new session and handles
+    // the whakapapa row + redirect to home.html.
   });
 
   function showStatus(msg) {
@@ -188,6 +267,13 @@
     el.style.display = 'block';
     document.getElementById('register-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'none';
+  }
+
+  function showCodeEntry(msg) {
+    showStatus(msg);
+    document.getElementById('code-section').style.display = 'block';
+    const input = document.getElementById('code-input');
+    if (input) input.focus();
   }
 </script>
 </body>

@@ -17,18 +17,18 @@
     <p class="subtitle">Ko te kāhui o tātou whānau — The gathering place of our family</p>
 
     <!-- Status message (shown after form submission) -->
-    <div id="gate-status" style="display:none;background:#e8f5e8;border:1px solid #b0c8a8;border-radius:8px;padding:14px 18px;margin-bottom:18px;color:#2d5a27;font-weight:600;text-align:center;"></div>
+    <div id="gate-status" class="gate-status"></div>
 
     <!-- Code entry section (shown after a sign-in email is sent) -->
-    <div id="code-section" style="display:none">
-      <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">Enter your code</h2>
-      <p style="font-size:0.9rem;color:#555;margin-bottom:12px">We emailed you a sign-in code. Enter it below to sign in.</p>
+    <div id="code-section" class="is-hidden">
+      <h2 class="gate-section-title">Enter your code</h2>
+      <p class="gate-hint">We emailed you a sign-in code. Enter it below to sign in.</p>
       <form id="code-form">
         <div class="form-group">
           <label for="code-input">Sign-in code</label>
           <input type="text" id="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required />
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+        <button type="submit" class="btn btn-primary btn-block">
           Verify &amp; sign in
         </button>
         <p class="error-msg" id="code-error"></p>
@@ -37,7 +37,7 @@
 
     <!-- Registration section (new users) -->
     <div id="register-section">
-      <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">New to the site? Register here</h2>
+      <h2 class="gate-section-title">New to the site? Register here</h2>
       <form id="register-form">
         <div class="form-group">
           <label for="reg-name">Full Name</label>
@@ -55,7 +55,7 @@
           <label for="reg-parent-name">Parent's Name</label>
           <input type="text" id="reg-parent-name" required />
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+        <button type="submit" class="btn btn-primary btn-block">
           Register &amp; get sign-in link
         </button>
         <p class="error-msg" id="register-error"></p>
@@ -63,27 +63,27 @@
     </div>
 
     <!-- Divider -->
-    <div style="display:flex;align-items:center;gap:12px;margin:22px 0">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="color:#888;font-size:0.85rem">Already registered?</span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
+    <div class="gate-divider">
+      <div class="rule"></div>
+      <span class="label">Already registered?</span>
+      <div class="rule"></div>
     </div>
 
     <!-- Returning user section -->
     <div id="login-section">
-      <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">Sign in</h2>
+      <h2 class="gate-section-title">Sign in</h2>
       <form id="login-form">
         <div class="form-group">
           <label for="login-email">Email</label>
           <input type="email" id="login-email" required />
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+        <button type="submit" class="btn btn-primary btn-block">
           Send sign-in link
         </button>
         <p class="error-msg" id="login-error"></p>
       </form>
-      <p style="text-align:center;margin-top:16px;font-size:0.85rem">
-        <a href="#" id="have-code-link" style="color:var(--koru-green)">Already have a sign-in code? Enter it here</a>
+      <p class="gate-code-link">
+        <a href="#" id="have-code-link">Already have a sign-in code? Enter it here</a>
       </p>
     </div>
 
@@ -111,10 +111,8 @@
       const el = document.getElementById('gate-status');
       if (!el) return;
       el.textContent = '⚠️ ' + friendly;
-      el.style.background = '#fdecea';
-      el.style.borderColor = '#e8a8a0';
-      el.style.color = '#8b2818';
-      el.style.display = 'block';
+      el.classList.add('is-error');
+      el.classList.add('is-visible');
     });
     // Clean the URL so a refresh doesn't re-show the message
     history.replaceState(null, '', window.location.pathname);
@@ -324,14 +322,14 @@
   function showStatus(msg) {
     const el = document.getElementById('gate-status');
     el.textContent = msg;
-    el.style.display = 'block';
-    document.getElementById('register-section').style.display = 'none';
-    document.getElementById('login-section').style.display = 'none';
+    el.classList.add('is-visible');
+    document.getElementById('register-section').classList.add('is-hidden');
+    document.getElementById('login-section').classList.add('is-hidden');
   }
 
   function showCodeEntry(msg) {
     showStatus(msg);
-    document.getElementById('code-section').style.display = 'block';
+    document.getElementById('code-section').classList.remove('is-hidden');
     const input = document.getElementById('code-input');
     if (input) input.focus();
   }

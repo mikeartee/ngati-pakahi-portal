@@ -379,3 +379,68 @@ footer {
 .text-center { text-align: center; }
 .text-muted { color: var(--text-mid); font-size: 0.88rem; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+
+/* ── Gate: status banner, section headings, divider, full-width buttons ── */
+.gate-status {
+  display: none;
+  background: #e8f5e8;
+  border: 1px solid #b0c8a8;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  color: var(--koru-green);
+  font-weight: 600;
+  text-align: center;
+}
+.gate-status.is-visible { display: block; }
+.gate-status.is-error {
+  background: #fdecea;
+  border-color: #e8a8a0;
+  color: #8b2818;
+}
+
+.gate-section-title {
+  font-size: 1.05rem;
+  color: var(--koru-green);
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.gate-hint {
+  font-size: 0.9rem;
+  color: var(--text-mid);
+  margin-bottom: 12px;
+}
+
+.btn-block {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.gate-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+}
+.gate-divider .rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.gate-divider .label {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.gate-code-link {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 0.85rem;
+}
+.gate-code-link a {
+  color: var(--koru-green);
+}
+
+.is-hidden { display: none; }

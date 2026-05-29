@@ -22,11 +22,11 @@
     <!-- Code entry section (shown after a sign-in email is sent) -->
     <div id="code-section" style="display:none">
       <h2 style="font-size:1.05rem;color:var(--koru-green);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">Enter your code</h2>
-      <p style="font-size:0.9rem;color:#555;margin-bottom:12px">We emailed you a 6-digit code. Enter it below to sign in.</p>
+      <p style="font-size:0.9rem;color:#555;margin-bottom:12px">We emailed you a sign-in code. Enter it below to sign in.</p>
       <form id="code-form">
         <div class="form-group">
-          <label for="code-input">6-digit code</label>
-          <input type="text" id="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+          <label for="code-input">Sign-in code</label>
+          <input type="text" id="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required />
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
           Verify &amp; sign in
@@ -82,14 +82,19 @@
         </button>
         <p class="error-msg" id="login-error"></p>
       </form>
+      <p style="text-align:center;margin-top:16px;font-size:0.85rem">
+        <a href="#" id="have-code-link" style="color:var(--koru-green)">Already have a sign-in code? Enter it here</a>
+      </p>
     </div>
 
   </div>
 </div>
 
 <script>
-  // Email currently awaiting code verification (set on register/login submit)
-  let pendingEmail = null;
+  // Email currently awaiting code verification. Persisted in localStorage so
+  // it survives a page refresh (the user often switches to their email app and
+  // comes back, which can reload the page).
+  let pendingEmail = localStorage.getItem('pending_email') || null;
 
   // ── Show error message if magic link was invalid/expired ────────────────
   // Supabase puts errors in the URL hash like #error=access_denied&error_description=otp_expired
@@ -236,7 +241,8 @@
 
     // Remember which email we're verifying, then show the code entry form.
     pendingEmail = email;
-    showCodeEntry('Check your email for a 6-digit sign-in code');
+    localStorage.setItem('pending_email', email);
+    showCodeEntry('Check your email for a sign-in code, then enter it below');
   });
 
   // ── Login form ─────────────────────────────────────────────────────────
@@ -263,7 +269,14 @@
     }
 
     pendingEmail = email;
-    showCodeEntry('Check your email for a 6-digit sign-in code');
+    localStorage.setItem('pending_email', email);
+    showCodeEntry('Check your email for a sign-in code, then enter it below');
+  });
+
+  // ── "Already have a code?" link ──────────────────────────────────────────
+  document.getElementById('have-code-link').addEventListener('click', function (e) {
+    e.preventDefault();
+    showCodeEntry('Enter the sign-in code from your email below');
   });
 
   // ── Code verification form ───────────────────────────────────────────────
@@ -272,10 +285,18 @@
   // thereby consume) the single-use magic link before the user can.
   document.getElementById('code-form').addEventListener('submit', async function (e) {
     e.preventDefault();
-    const token = document.getElementById('code-input').value.trim();
+    const token = document.getElementById('code-input').value.trim().replace(/\s+/g, '');
     const errEl = document.getElementById('code-error');
     errEl.style.display = 'none';
 
+    // If we lost track of which email (e.g. cleared storage), ask for it.
+    if (!pendingEmail) {
+      const entered = prompt('Which email address did you request the code for?');
+      if (entered) {
+        pendingEmail = entered.trim();
+        localStorage.setItem('pending_email', pendingEmail);
+      }
+    }
     if (!pendingEmail) {
       errEl.textContent = '⚠️ Please request a sign-in code first.';
       errEl.style.display = 'block';
@@ -295,8 +316,9 @@
       errEl.style.display = 'block';
       return;
     }
-    // On success, onAuthStateChange fires with the new session and handles
-    // the whakapapa row + redirect to home.html.
+    // Success — onAuthStateChange fires with the new session and handles the
+    // whakapapa row + redirect to home.html.
+    localStorage.removeItem('pending_email');
   });
 
   function showStatus(msg) {
